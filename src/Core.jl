@@ -199,7 +199,7 @@ end
 """
     SetGranularities(p::DSProblem{T}, g::Vector{T}) where T
 
-Call [`SetGranularity`](@ref) for each variable. The vector `g` should contain the granularity 
+Call [`SetGranularity`](@ref) for each variable. The vector `g` should contain the granularity
 for each variable.
 """
 function SetGranularities(p::DSProblem{T}, g::Vector{T}) where T
@@ -261,7 +261,7 @@ varies with a significantly different scale to the others.
 """
 function SetVariableBound(p::DSProblem{T}, index::Int, l::T, u::T) where T
     1 <= index <= p.N || error("Invalid variable index, should be in range 1 to $(p.N).")
-    
+
     p.lower_bounds[index] = isinf(l) ? nothing : l
     p.upper_bounds[index] = isinf(u) ? nothing : u
 end
@@ -275,7 +275,7 @@ a lower and upper bound for each variable.
 function SetVariableBounds(p::DSProblem{T}, l::Vector{T}, u::Vector{T}) where T
     size(l, 1) == p.N || error("Lower bound vector dimensions don't match problem definition")
     size(u, 1) == p.N || error("Upper bound vector dimensions don't match problem definition")
-    
+
     for i=1:p.N
         SetVariableBound(p, i, l[i], u[i])
     end
@@ -300,6 +300,7 @@ function Optimize!(p::DSProblem)
     end
 
     Finish(p)
+    println("test2")
 end
 
 #Initialise solver
