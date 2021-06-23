@@ -300,7 +300,7 @@ function Optimize!(p::DSProblem)
     end
 
     Finish(p)
-    println("test2")
+    println("testbranch")
 end
 
 #Initialise solver
