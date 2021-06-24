@@ -281,7 +281,7 @@ function InitialPointEvaluationOutput(p::DSProblem, feasibility::ConstraintOutco
         str *= tab1 * "f(x₀) = $(p.i_cost)" * "\n"
         str *= tab1 * "Feasibility: Weak Infeasible" * "\n"
     end
-    
+
     str *= "\n"
 
     print(str)
@@ -332,7 +332,7 @@ function OutputPointEvaluation(i::Int, point::Vector{T}, cost::T, h::T, is_from_
     else
         str *= tab2 * "Evaluating point $i:" * "\n"
     end
-    
+
     str *= tab3 * "x = $point" * "\n"
     str *= tab3 * "f(x) = $cost" * "\n"
     str *= tab3 * "h(x) = $h" * "\n"

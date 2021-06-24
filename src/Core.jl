@@ -291,6 +291,11 @@ barrier constraints have been set then the initial point must be value for
 those constraints.
 """
 function Optimize!(p::DSProblem)
+    # check the dimension of the problem
+    if p_dim(p)==2
+        Optimize_Bi!(p)
+    end
+
     #TODO check that problem definition is complete
     Setup(p)
 
@@ -300,7 +305,6 @@ function Optimize!(p::DSProblem)
     end
 
     Finish(p)
-    println("testbranch22")
 end
 
 #Initialise solver

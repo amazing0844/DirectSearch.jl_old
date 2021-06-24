@@ -15,6 +15,9 @@ include("./LTMADS.jl")
 include("./OrthoMADS.jl")
 #include("./GPS.jl")
 
+include("./BiMADS.jl")
+
+
 include("./test_utils.jl")
 
 
