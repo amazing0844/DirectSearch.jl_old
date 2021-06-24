@@ -9,10 +9,12 @@ export p_dim, testbi
 """
 Potential BiMADS points on Pareto Front
 """
-struct B_points
+mutable struct B_points
     f1_cost::Float64
     f2_cost::Float64
 end
+
+
 
 function test1(x)
     f1(x) = (x[1] + 2) .^ 2 +(x[2] - 2) .^ 2- 10.0
@@ -32,6 +34,8 @@ p = DSProblem(
     initial_point = [0, 0],
     full_output = true,
 );
+
+
 # SetVariableRange(p,1,0.,0.19)
 # cons1(x) = x[1] > 0.
 # AddExtremeConstraint(p, cons1)
@@ -49,7 +53,7 @@ function testbi(p::DSProblem)
 end
 
 """
-    p_split(p::DSProblem)
+    p_split(p::DSProblem)::Tuple{DSProblem,DSProblem}
 
 To split Bi-obj problem into two single obj problems
 """
@@ -62,6 +66,24 @@ function p_split(p::DSProblem)::Tuple{DSProblem,DSProblem}
     return p1,p2
 end
 
+"""
+    function phi()::Float64
+
+Auxiliary Function from BiMADS. Aim to refomulate the Bi-obj problem into
+single-obj problem. Return the cost of the refomulated objective function
+
+x is the point to be evaluated, r is the reference point
+"""
+function phi(p::DSProblem, r::Vector{Float64},x::Vector{Float64})::Float64
+    p1::DSProblem,p2::DSProblem=p_split(p)
+    f1::Float64=p1.objective(x)
+    f2::Float64=p2.objective(x)
+    if (f1<=r[1]) && (f2<=r[2]) #if x dominant r
+        return -(r[1]-f1)^2*(r[2]-f2)^2
+    else
+        return (max(f1-r[1],0))^2+(max(f2-r[2],0))^2
+    end
+end
 
 """
     Optimize_Bi!(p::DSProblem)
@@ -85,7 +107,7 @@ Optimize_Bi!(p)
 
 
 """
-    p_dim(obj::Function)::Int
+    p_dim(obj::Function,p.N)::Int
 
 The dimension of the given objective function
 """
