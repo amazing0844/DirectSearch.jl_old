@@ -1,24 +1,36 @@
 # Bi-MADS record all dominated points
 # include("DirectSearch.jl")
 
-
+using LinearAlgebra
 # using DirectSearch
 export p_dim, testbi
 #TODO BiMADS
 
-"""
-Potential BiMADS points on Pareto Front
-"""
+# """
+# Potential BiMADS points on Pareto Front
+# """
 # mutable struct B_points
 #     f1_cost::Float64
 #     f2_cost::Float64
 # end
 
+function s(x)
+    return abs(floor(x + 1 / 2) - x)
+end
+
+function f(x::Vector{Float64})
+    Taka = 0
+    w = 0.9
+    for n in 1:100
+        Taka -= w^n * s(2^n * x[1])
+    end
+    return Taka
+end
 
 
 function test1(x)
     f1(x) = (x[1] + 2) .^ 2 +(x[2] - 2) .^ 2- 10.0
-    f2(x) = (x[1] + 2) .^ 2 +(x[2] - 2) .^ 2- 20.0
+    f2(x) = f(x)
     return f1, f2
 end
 
@@ -86,6 +98,94 @@ function phi(p::DSProblem, r::Vector{Float64},x::Vector{Float64})::Float64
 end
 
 """
+    get_Bpoints(p1::DSProblem,p2::DSProblem,flag::Int)
+
+Get the points to determine the reference point and Pareto front
+flag for identifying optimize p1 or p2
+"""
+function get_Bpoints(p1::DSProblem,p2::DSProblem, flag::Int)
+    temp_Bpoints=Vector{Vector{Float64}}()
+    Setup(p1)
+    # push B_point for initial point
+    flag==1 && push!(temp_Bpoints,[p1.objective(p1.x),p2.objective(p1.x)])
+
+    while _check_stoppingconditions(p1)
+        p1.full_output && OutputIterationDetails(p1)
+        if OptimizeLoop(p1)==Dominating
+            flag==1 && push!(temp_Bpoints, [p1.x_cost,p2.objective(p1.x)])
+            flag==2 && push!(temp_Bpoints, [p2.objective(p1.x),p1.x_cost])
+        end
+    end
+
+    return temp_Bpoints
+end
+
+"""
+Compute the Pareto front of a set of points.
+Uses an inefficient brute-force exact method.
+The Pareto front is also known as the Pareto frontier or Pareto set.
+CopyRight https://github.com/svrama/ParetoRecipes.jl
+"""
+function pareto_front(points, minimize = true)
+    cmp_strict = minimize ? (<) : (>);
+    cmp = minimize ? (<=) : (>=);
+    dims = size(points,2)
+    strictly_dominates(u, v) = all(cmp(u[i], v[i]) for i = 1:dims+1) && any(cmp_strict(u[i], v[i]) for i = 1:dims+1)
+    undominated(p) = !any(strictly_dominates(p2, p) for p2 ∈ points if p2 != p)
+    front = filter(undominated, points)
+    sort(front)
+    return front
+end
+
+"""
+    get_ref_init(p1,p2)::Vector{Float64}
+
+get the reference point and initial point for the refomulated problem
+"""
+function get_ref_init(p1,p2)::Tuple{Vector{Float64},Vector{Float64}}
+    ref_point=[0.,0.]
+    initial_point=[0.,0.]
+    pareto_set=Vector{Vector{Float64}}()
+    # optmization for p1
+    append!(pareto_set,get_Bpoints(p1,p2,1))
+    pareto_set=reverse(pareto_set)
+    # optmization for p2
+    append!(pareto_set,get_Bpoints(p2,p1,2))
+    pareto_set=pareto_front(pareto_set)
+
+    max_distance=0.
+    max_index=2
+
+
+
+
+
+
+    for i=2:length(pareto_set)-1
+        dis=LinearAlgebra.norm(pareto_set[i]-pareto_set[i-1])
+        +LinearAlgebra.norm(pareto_set[i]-pareto_set[i+1])
+        if dis>=max_distance
+            max_distance=dis
+            max_index=i
+        end
+    end
+
+
+    @show pareto_set
+    @show length(pareto_set)
+    @show max_index
+    @show max_distance
+
+
+    # find the point with largest gap
+    # for i=1:length(all)
+    # end
+
+    return ref_point, initial_point
+end
+
+
+"""
     Optimize_Bi!(p::DSProblem)
 
 Run the BiMADS algorithm on problem `p`.
@@ -98,12 +198,22 @@ function Optimize_Bi!(p::DSProblem)
     println("BiMADS")
     p1::DSProblem,p2::DSProblem=p_split(p)
 
+    ref_point, initial_point=get_ref_init(p1,p2)
+    display(ref_point)
 
-    Optimize!(p2)
+    p_re=DSProblem()
+    while 1
 
+        
+        p.full_output && OutputIterationDetails(p_re)
+        OptimizeLoop(p_re)
+    end
+
+
+    println("Finish")
 end
 
-# Optimize_Bi!(p)
+Optimize_Bi!(p)
 
 
 """

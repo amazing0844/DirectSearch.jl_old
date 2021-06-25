@@ -295,7 +295,7 @@ function Optimize!(p::DSProblem)
     if p_dim(p)==2
         Optimize_Bi!(p)
     end
-        println("ddd")
+
     #TODO check that problem definition is complete
     Setup(p)
 
@@ -305,6 +305,7 @@ function Optimize!(p::DSProblem)
     end
 
     Finish(p)
+
 end
 
 #Initialise solver
@@ -349,6 +350,7 @@ function OptimizeLoop(p)
     MeshUpdate!(p, result)
 
     p.status.iteration += 1
+    return result
 end
 
 #Cleanup and reporting
