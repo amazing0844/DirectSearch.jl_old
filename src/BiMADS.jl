@@ -9,10 +9,10 @@ export p_dim, testbi
 """
 Potential BiMADS points on Pareto Front
 """
-mutable struct B_points
-    f1_cost::Float64
-    f2_cost::Float64
-end
+# mutable struct B_points
+#     f1_cost::Float64
+#     f2_cost::Float64
+# end
 
 
 
@@ -103,7 +103,7 @@ function Optimize_Bi!(p::DSProblem)
 
 end
 
-Optimize_Bi!(p)
+# Optimize_Bi!(p)
 
 
 """

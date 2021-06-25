@@ -295,7 +295,7 @@ function Optimize!(p::DSProblem)
     if p_dim(p)==2
         Optimize_Bi!(p)
     end
-
+        println("ddd")
     #TODO check that problem definition is complete
     Setup(p)
 
