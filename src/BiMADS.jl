@@ -181,25 +181,32 @@ function Optimize_Bi!(p::DSProblem)
 
     ref_point=Vector{Float64}()
     L=length(undominated_points)
+    n_iteration=1
     j = 0     #initial point for the refomulated sigle-obj problem
     δ = 0.0 # quantify the quality of the coverage of the undominated points
-    # here is the coverage of the point with largest distance to its adjacent points
+            # here is the coverage of the point with largest distance to its adjacent points
 
     # Main iteration
-    while 1
+    while true
+        #Reference point determination
         if L==1
             j=1
+            ref_point=undominated_points[1].cost
         elseif L==2
-            j=2
+            j=1 #different definition in paper(j=2) and books(j=1)
             ref_point=[undominated_points[2].cost[1],undominated_points[1].cost[2]]
-            δ=LinearAlgebra.norm(points[x].cost - points[x-1].cost)^2
+            δ=(LinearAlgebra.norm(points[x].cost - points[x-1].cost)^2)/(undominated_points[2].weight+1)
         else
-
+            j = get_ref(undominated_points)
+            ref_point=[undominated_points[j+1].cost[1],undominated_points[j-1].cost[2]]
+            @show j
+            δ=(LinearAlgebra.norm(undominated_points[j].cost - undominated_points[j-1].cost)^2
+            +LinearAlgebra.norm(undominated_points[j].cost - undominated_points[j+1].cost)^2)/(undominated_points[j].weight+1)
         end
+        undominated_points[j].weight+=1
 
-        #Reference point determination
-        j = get_ref(undominated_points)
-        @show j
+
+
 
 
 
@@ -209,21 +216,16 @@ function Optimize_Bi!(p::DSProblem)
         # @show max_index
         # @show max_distance
 
-        # p_re=DSProblem()
-        # while 1
-        #     ref_point, initial_point=get_ref_init(p1,p2)
-        #     display(ref_point)
-        #
-        #     p.full_output && OutputIterationDetails(p_re)
-        #     # OptimizeLoop(p_re)
-        #     w+=1
-        # end
+
 
         # #update X_L
         # # push sth
         # sort!(points, by = v -> v.cost, rev = false)
         # undominated_points[j].weight+=1
         break
+        n_iteration>=p.stoppingconditions[1].limit ? (break) : (n_iteration+=1)
+
+
     end
 
     println("Finish")
