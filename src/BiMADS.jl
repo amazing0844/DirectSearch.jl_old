@@ -48,7 +48,7 @@ end
 
 # obj(x) = x[1]^2
 
-p = DSProblem(2; objective = test1, initial_point = [0, 0], full_output = true);
+p = DSProblem(2; objective = test1, initial_point = [0, 0], full_output = false);
 
 
 # SetVariableRange(p,1,0.,0.19)
