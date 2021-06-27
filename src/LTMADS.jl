@@ -110,4 +110,3 @@ function B_generation(N, i, b, L; perm=shuffle(setdiff(1:N, i)))
     B = [B b]
     return B
 end
-

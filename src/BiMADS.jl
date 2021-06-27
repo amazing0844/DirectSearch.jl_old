@@ -7,10 +7,12 @@ points for BiMADS Algo
 """
 mutable struct B_points
     cost::Vector{Float64}
+    x_now::Vector{Float64}
     weight::Int
-    function B_points(cost::Vector{Float64}, w::Int = 0)
+    function B_points(cost::Vector{Float64},x::Vector{Float64}, w::Int=0)
         p = new()
         p.cost = cost
+        p.x_now=x
         p.weight = w
         return p
     end
@@ -34,16 +36,23 @@ end
 function test1(x)
     f1(x) = (x[1] + 2) .^ 2  - 10.0
     # f2(x) = f(x)
-    f2(x) = (x[1] -2) .^ 2 +20
+    f2(x) = (x[1] -2) .^ 2 -10
     return f1, f2
+end
+
+function test2(x)
+f1(x) = (x[1] + 1) .^ 2 +(x[2] - 1) .^2 -10
+# f2(x) = (x[1] + 12) .^ 2 +(x[2] - 3) .^2 + 20.
+f2(x) = f(x)
+return f1,f2
 end
 
 function ex005(x)
     return [x[1]^2 - x[2]^2; x[1] / x[2]]
 end
 
-p = DSProblem(2; objective = test1, initial_point = [0, 0],iteration_limit=3, full_output = false);
-
+# p = DSProblem(2; objective = test2, initial_point = [0.,0.],iteration_limit=30, full_output = false);
+p = DSProblem(1; objective = test1, initial_point = [-1.],iteration_limit=30, full_output = false);
 function plot_Bpoint(points::Vector{B_points})
     fig = Plots.scatter()
     for i = 1:length(points)
@@ -53,9 +62,11 @@ return fig
 end
 
 function get_adj_dis(points::Vector{B_points})
+    println("-----------------")
     for i=1:length(points)-1
         display(LinearAlgebra.norm(points[i+1].cost - points[i].cost)^2)
     end
+    println("-----------------")
 end
 
 """
@@ -84,18 +95,18 @@ function get_Bpoints(p1::DSProblem, p2::DSProblem, flag::Int)
     Setup(p1)
     # push B_point for initial point
     flag == 1 &&
-        push!(temp_Bpoints, B_points([p1.objective(p1.x), p2.objective(p1.x)]))
+        push!(temp_Bpoints, B_points([p1.objective(p1.x), p2.objective(p1.x)],p1.x))
 
     while _check_stoppingconditions(p1)
         p1.full_output && OutputIterationDetails(p1)
         if OptimizeLoop(p1) == Dominating
             flag == 1 &&
-                push!(temp_Bpoints, B_points([p1.x_cost, p2.objective(p1.x)]))
+                push!(temp_Bpoints, B_points([p1.x_cost, p2.objective(p1.x)],p1.x))
             flag == 2 &&
-                push!(temp_Bpoints, B_points([p2.objective(p1.x), p1.x_cost]))
+                push!(temp_Bpoints, B_points([p2.objective(p1.x), p1.x_cost],p1.x))
         end
     end
-display(plot_Bpoint(temp_Bpoints))
+# display(plot_Bpoint(temp_Bpoints))
     return temp_Bpoints
 end
 
@@ -136,8 +147,8 @@ function initial_X_L(p1, p2)::Vector{B_points}
 
 
     display(x_L)
-    get_adj_dis(x_L)
-    display(plot_Bpoint(x_L))
+    # get_adj_dis(x_L)
+    # display(plot_Bpoint(x_L))
     return x_L
 end
 
@@ -153,7 +164,7 @@ function get_ref(points::Vector{B_points})::Int
 
     for i = 2:length(points)-1
         if dis(i)/(points[i].weight+1) >= max_distance
-            max_distance = dis(i)
+            max_distance = dis(i)/(points[i].weight+1)
             max_index = i
         end
     end
@@ -183,7 +194,7 @@ function ReferencePointDetermination(undominated_points::Vector{B_points})::Tupl
         +LinearAlgebra.norm(undominated_points[j].cost - undominated_points[j+1].cost)^2)/(undominated_points[j].weight+1)
     end
     undominated_points[j].weight+=1
-
+    # get_adj_dis(undominated_points)
     return j, δ, ref_point
 end
 
@@ -196,9 +207,12 @@ single-obj problem. Return the cost of the refomulated objective function
 x is the point to be evaluated, r is the reference point
 """
 function phi(f1::Function,f2::Function, r::Vector{Float64}, x::Vector{Float64})
+
     if (f1(x) <= r[1]) && (f2(x) <= r[2]) #if x dominant r
+        # @show -(r[1] - x[1])^2 * (r[2] - x[2])^2
         return -(r[1] - f1(x))^2 * (r[2] - f2(x))^2
     else
+        # @show (max(x[1] - r[1], 0))^2 + (max(x[2] - r[2], 0))^2
         return (max(f1(x) - r[1], 0))^2 + (max(f2(x) - r[2], 0))^2
     end
 end
@@ -213,19 +227,21 @@ barrier constraints have been set then the initial point must be value for
 those constraints.
 """
 function Optimize_Bi!(p::DSProblem)
-
+    # if p.stoppingconditions[1].limit>=100
+    #     println("Too many iterations")
+    # end
     println("BiMADS")
     p1::DSProblem, p2::DSProblem = p_split(p)
     #set the iteration limit for sub-problem to default value=1000
     #could be customize if add attributes in Core.jl in the future
     SetIterationLimit(p1,1000)
     SetIterationLimit(p2,1000)
-    p_reform::DSProblem=deepcopy(p::DSProblem)
     f1 = p1.objective
     f2 = p2.objective
+p_reform=DSProblem(2;iteration_limit=1000,full_output=p.full_output);
     # Initialization
     undominated_points = pareto_front(initial_X_L(p1, p2))
-    display(undominated_points)
+    # display(undominated_points)
 # display(plot_Bpoint(undominated_points))
     ref_point=Vector{Float64}()
 
@@ -237,40 +253,49 @@ function Optimize_Bi!(p::DSProblem)
     # Main iteration
     while true
         tt=0
+p_reform=nothing
+p_reform=DSProblem(p.N;iteration_limit=50,full_output=p.full_output);
+        println("Start of iteration",n_iteration,"==========")
         #Reference point determination
         j, δ, ref_point=ReferencePointDetermination(undominated_points)
         println("j=",j,"  ref=",ref_point)
         #Single-objective formulation minimization
         f_reform(x)=phi(f1,f2, ref_point, x)
         SetObjective(p_reform, f_reform)
-        SetInitialPoint(p_reform,undominated_points[j].cost)
+        SetInitialPoint(p_reform,undominated_points[j].x_now)
 
+
+# fig1=plot_Bpoint(undominated_points)
+p_reform.full_output=false
         #run MADS for refomulated problem and add new undominated points
         Setup(p_reform)
         while _check_stoppingconditions(p_reform)
             p_reform.full_output && OutputIterationDetails(p_reform)
             if OptimizeLoop(p_reform) == Dominating
-                    push!(undominated_points, B_points([f1(p_reform.x), f2(p_reform.x)]))
+                    push!(undominated_points, B_points([p1.objective(p_reform.x), p2.objective(p_reform.x)],p_reform.x))
                     tt+=1
             end
-        end
 
+        end
+# fig2=plot_Bpoint(undominated_points)
 println("Add new points:",tt)
-display(undominated_points)
+# display(undominated_points)
 # display(plot_Bpoint(undominated_points))
 
         # #update X_L
         pareto_front(undominated_points)
-        display(undominated_points)
-        display(plot_Bpoint(undominated_points))
+        # display(undominated_points)
+        # fig3=plot_Bpoint(undominated_points)
+        # fig2=plot_Bpoint(undominated_points)
         # sort!(undominated_points, by = v -> v.cost, rev = false)
         # undominated_points[j].weight+=1
         # break
         n_iteration>=p.stoppingconditions[1].limit ? (break) : (n_iteration+=1)
-        println("iteration",n_iteration)
+        println("===============================")
+        # display(plot(fig1,fig2,fig3))
 
     end
-
+display(plot_Bpoint(undominated_points))
     println("Finish")
 end
 
