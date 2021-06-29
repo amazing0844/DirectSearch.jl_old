@@ -3,12 +3,12 @@ export p_dim, testbi
 #TODO BiMADS
 
 """
-points for BiMADS Algo
+points for BiMADS Algo on the BiMADS map
 """
 mutable struct B_points
-    cost::Vector{Float64}
+    cost::Vector{Float64}  #f1 and f2 vale on BiMADS map
     x_now::Vector{Float64}
-    weight::Int
+    weight::Int            #weight for each undominated point to determine the δ
     function B_points(cost::Vector{Float64},x::Vector{Float64}, w::Int=0)
         p = new()
         p.cost = cost
@@ -16,6 +16,27 @@ mutable struct B_points
         p.weight = w
         return p
     end
+end
+
+function DTLZ2n2(x)
+
+    # params
+    M = 2; # Number of objectives
+    n = 2; # Number of variables
+    k = n - M + 1;
+
+    # g(x)
+    gx = sum((x[M:n] .- 0.5).^2);
+
+    # functions
+    ff = ones(M);
+    ff1(x) = (1 + gx ) * prod(cos.(0.5 * pi * x[1:M-1]));
+
+        ff2(x) = (1 + gx) * prod(cos.(0.5 * pi * x[1:M-2])) * sin(0.5 * pi * x[M - 2+ 1]);
+
+
+    return ff1,ff2
+
 end
 
 function s(x)
@@ -31,12 +52,10 @@ function f(x::Vector{Float64})
     return Taka
 end
 
-
-
 function test1(x)
     f1(x) = (x[1] + 2) .^ 2  - 10.0
     # f2(x) = f(x)
-    f2(x) = (x[1] -2) .^ 2 -10
+    f2(x) = (x[1] -2) .^ 2 +20
     return f1, f2
 end
 
@@ -51,8 +70,15 @@ function ex005(x)
     return [x[1]^2 - x[2]^2; x[1] / x[2]]
 end
 
-# p = DSProblem(2; objective = test2, initial_point = [0.,0.],iteration_limit=30, full_output = false);
-p = DSProblem(1; objective = test1, initial_point = [-1.],iteration_limit=30, full_output = false);
+# p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=50, full_output = false);
+p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=30, full_output = false);
+# p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=50, full_output = false);
+
+# cons1(x) = x[1] > -1.
+# AddExtremeConstraint(p, cons1)
+# cons2(x) = x[1] <1.
+# AddExtremeConstraint(p, cons2)
+
 function plot_Bpoint(points::Vector{B_points})
     fig = Plots.scatter()
     for i = 1:length(points)
@@ -146,7 +172,7 @@ function initial_X_L(p1, p2)::Vector{B_points}
     append!(x_L, get_Bpoints(p2, p1, 2))
 
 
-    display(x_L)
+    # display(x_L)
     # get_adj_dis(x_L)
     # display(plot_Bpoint(x_L))
     return x_L
@@ -207,14 +233,23 @@ single-obj problem. Return the cost of the refomulated objective function
 x is the point to be evaluated, r is the reference point
 """
 function phi(f1::Function,f2::Function, r::Vector{Float64}, x::Vector{Float64})
-
+        # @show x
     if (f1(x) <= r[1]) && (f2(x) <= r[2]) #if x dominant r
-        # @show -(r[1] - x[1])^2 * (r[2] - x[2])^2
+        # @show -(r[1] - f1(x))^2 * (r[2] - f2(x))^2
         return -(r[1] - f1(x))^2 * (r[2] - f2(x))^2
     else
-        # @show (max(x[1] - r[1], 0))^2 + (max(x[2] - r[2], 0))^2
+        # @show (max(f1(x) - r[1], 0))^2 + (max(f2(x) - r[2], 0))^2
         return (max(f1(x) - r[1], 0))^2 + (max(f2(x) - r[2], 0))^2
     end
+end
+
+"""
+    reset_p(p::DSProblem)
+reset the reformulated problem for new MADS iteration
+
+"""
+function reset_p(p_init::DSProblem,p_reform::DSProblem)::DSProblem
+    p_reform=deepcopy(p_init)
 end
 
 """
@@ -227,9 +262,7 @@ barrier constraints have been set then the initial point must be value for
 those constraints.
 """
 function Optimize_Bi!(p::DSProblem)
-    # if p.stoppingconditions[1].limit>=100
-    #     println("Too many iterations")
-    # end
+
     println("BiMADS")
     p1::DSProblem, p2::DSProblem = p_split(p)
     #set the iteration limit for sub-problem to default value=1000
@@ -238,7 +271,7 @@ function Optimize_Bi!(p::DSProblem)
     SetIterationLimit(p2,1000)
     f1 = p1.objective
     f2 = p2.objective
-p_reform=DSProblem(2;iteration_limit=1000,full_output=p.full_output);
+    p_reform=DSProblem(1)
     # Initialization
     undominated_points = pareto_front(initial_X_L(p1, p2))
     # display(undominated_points)
@@ -253,9 +286,8 @@ p_reform=DSProblem(2;iteration_limit=1000,full_output=p.full_output);
     # Main iteration
     while true
         tt=0
-p_reform=nothing
-p_reform=DSProblem(p.N;iteration_limit=50,full_output=p.full_output);
-        println("Start of iteration",n_iteration,"==========")
+        p_reform=reset_p(p,p_reform)
+        println("Start of iteration",n_iteration)
         #Reference point determination
         j, δ, ref_point=ReferencePointDetermination(undominated_points)
         println("j=",j,"  ref=",ref_point)
@@ -264,9 +296,8 @@ p_reform=DSProblem(p.N;iteration_limit=50,full_output=p.full_output);
         SetObjective(p_reform, f_reform)
         SetInitialPoint(p_reform,undominated_points[j].x_now)
 
-
 # fig1=plot_Bpoint(undominated_points)
-p_reform.full_output=false
+# p_reform.full_output=false
         #run MADS for refomulated problem and add new undominated points
         Setup(p_reform)
         while _check_stoppingconditions(p_reform)
@@ -275,31 +306,31 @@ p_reform.full_output=false
                     push!(undominated_points, B_points([p1.objective(p_reform.x), p2.objective(p_reform.x)],p_reform.x))
                     tt+=1
             end
-
         end
 # fig2=plot_Bpoint(undominated_points)
 println("Add new points:",tt)
 # display(undominated_points)
-# display(plot_Bpoint(undominated_points))
 
-        # #update X_L
+        #update X_L
         pareto_front(undominated_points)
+        println("===============================")
+        n_iteration>=p.stoppingconditions[1].limit ? (break) : (n_iteration+=1)
         # display(undominated_points)
-        # fig3=plot_Bpoint(undominated_points)
         # fig2=plot_Bpoint(undominated_points)
         # sort!(undominated_points, by = v -> v.cost, rev = false)
-        # undominated_points[j].weight+=1
-        # break
-        n_iteration>=p.stoppingconditions[1].limit ? (break) : (n_iteration+=1)
-        println("===============================")
         # display(plot(fig1,fig2,fig3))
-
     end
-display(plot_Bpoint(undominated_points))
-    println("Finish")
+println("Total undominated points:", length(undominated_points))
+# fig=plot_Bpoint(undominated_points)
+fig=scatter()
+for i in 1:length(undominated_points)
+    fig=scatter!([undominated_points[i].cost[1]],[undominated_points[i].cost[2]],legend = false)
+end
+# display(fig)
+savefig(fig, "/Users/zyy/Desktop/XJTLU/MSc_Project/Julia/test_julia/Results/C_DS_result_$(p.stoppingconditions[1].limit).pdf");
 end
 
-Optimize_Bi!(p)
+@time Optimize_Bi!(p)
 
 
 """
