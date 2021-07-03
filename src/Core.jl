@@ -1,10 +1,11 @@
 using LinearAlgebra
 using Distributed
 using SharedArrays
+using REPL
 
 export DSProblem, SetObjective, SetInitialPoint, SetVariableBound, SetMaxEvals,
        SetOpportunisticEvaluation, SetSense, SetVariableBounds, Optimize!, SetGranularity,
-       SetGranularities
+       SetGranularities,check
 
 
 """
@@ -281,6 +282,16 @@ function SetVariableBounds(p::DSProblem{T}, l::Vector{T}, u::Vector{T}) where T
     end
 end
 
+# function check()
+#         bb = bytesavailable(stdin)
+#         if bb>0
+#             println("quit")
+#             return true
+#         end
+#         return false
+# end
+
+
 """
     Optimize!(p::DSProblem)
 
@@ -290,10 +301,15 @@ Run the direct search algorithm on problem `p`.
 barrier constraints have been set then the initial point must be value for
 those constraints.
 """
+
 function Optimize!(p::DSProblem)
+# term = REPL.Terminals.TTYTerminal("xterm",stdin,stdout,stderr)
+# REPL.Terminals.raw!(term,true)
+# Base.start_reading(stdin)
+
     # check the dimension of the problem
     if p_dim(p)==2
-        Optimize_Bi!(p)
+        return Optimize_Bi!(p)
     else
     #TODO check that problem definition is complete
     Setup(p)
@@ -301,6 +317,12 @@ function Optimize!(p::DSProblem)
     while _check_stoppingconditions(p)
         p.full_output && OutputIterationDetails(p)
         OptimizeLoop(p)
+        # sleep(2)
+        # check()==1 && break
+        # if !isempty(input)
+        #     display(input)
+        #     break
+        # end
     end
 
     Finish(p)

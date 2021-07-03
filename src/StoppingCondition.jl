@@ -1,9 +1,10 @@
 export AddStoppingCondition, SetIterationLimit, BumpIterationLimit, SetFunctionEvaluationLimit,
-       BumpFunctionEvaluationLimit, SetMinimumMeshSize, SetMinimumPollSize, RuntimeStoppingCondition
+       BumpFunctionEvaluationLimit, SetMinimumMeshSize, SetMinimumPollSize, RuntimeStoppingCondition,
+       SetButtonLimit
 
 """
     AddStoppingCondition(p::DSProblem, c::T) where T <: AbstractStoppingCondition
-   
+
 Add the stopping condition `c` to the problem `p`.
 """
 function AddStoppingCondition(p::DSProblem, c::T) where T <: AbstractStoppingCondition
@@ -12,6 +13,10 @@ end
 
 _check_stoppingconditions(p::DSProblem) = _check_stoppingconditions(p, p.stoppingconditions)
 function _check_stoppingconditions(p::DSProblem, c::Vector{T}) where T <: AbstractStoppingCondition
+    # term = REPL.Terminals.TTYTerminal("xterm",stdin,stdout,stderr)
+    # REPL.Terminals.raw!(term,true)
+    # Base.start_reading(stdin)
+    # check()==1 && return false
     for condition in c
         #Stopping conditions return true if optimisation should continue,
         #false if the condition is met and optimisation should stop
@@ -53,7 +58,7 @@ end
 init_stoppingcondition(p::DSProblem, ::AbstractStoppingCondition) = nothing
 
 _get_conditionindexes(p::DSProblem, target::Type) = _get_conditionindexes(p.stoppingconditions, target)
-_get_conditionindexes(s::Vector{AbstractStoppingCondition}, target::Type) = 
+_get_conditionindexes(s::Vector{AbstractStoppingCondition}, target::Type) =
     [i for (i,v) in enumerate(s) if typeof(v) == target]
 
 
@@ -69,7 +74,7 @@ StoppingConditionStatus(::IterationStoppingCondition) = "Iteration limit"
 CheckStoppingCondition(p::DSProblem, s::IterationStoppingCondition) = p.status.iteration < s.limit
 
 function init_stoppingcondition(p::DSProblem, s::IterationStoppingCondition)
-    if s.limit == -1 
+    if s.limit == -1
         error("Please set a maximum number of iterations")
     end
 end
@@ -222,7 +227,7 @@ StoppingConditionStatus(::FunctionEvaluationStoppingCondition) = "Function evalu
 CheckStoppingCondition(p::DSProblem, s::FunctionEvaluationStoppingCondition) = p.status.function_evaluations < s.limit
 
 function init_stoppingcondition(::DSProblem, s::FunctionEvaluationStoppingCondition)
-    if s.limit == -1 
+    if s.limit == -1
         error("Please set a maximum number of function evaluations")
     end
 end
@@ -288,4 +293,62 @@ function SetRuntimeLimit(p::DSProblem, i::Float64)
             p.stoppingconditions[index].limit = i
         end
     end
+end
+
+#Termiated by pressing "q"
+mutable struct ButtonStoppingCondition <: AbstractStoppingCondition
+    limit::String
+end
+
+StoppingConditionStatus(::RuntimeStoppingCondition) = "Terminated by user"
+
+CheckStoppingCondition(p::DSProblem, s::RuntimeStoppingCondition) = readline()=s.limit
+
+
+
+"""
+    SetRuntimeLimit(p::DSProblem, i::Float64)
+
+Set the runtime limit to `i`.
+"""
+function SetButtonLimit(p::DSProblem, i::String)
+
+        runtime_indexes = _get_conditionindexes(p, ButtonStoppingCondition)
+        for index in runtime_indexes
+            p.stoppingconditions[index].limit = i
+        end
+end
+
+
+#pareto front coverage limit
+mutable struct ParetoStoppingCondition <: AbstractStoppingCondition
+    limit::Float64
+end
+
+StoppingConditionStatus(::ParetoStoppingCondition) = "Pareto front coverage limit"
+
+CheckStoppingCondition(p::DSProblem, s::ParetoStoppingCondition) = (time() - p.status.start_time) < s.limit
+
+function init_stoppingcondition(::DSProblem, s::RuntimeStoppingCondition)
+    if s.limit <= 0
+        error("Pareto front coverage limit must be positive.")
+    end
+end
+
+"""
+    SetRuntSetParetoCoverageLimitimeLimit(p::DSProblem, i::Float64)
+
+Set the runtime limit to `i`.
+"""
+function SetParetoCoverageLimit(p::DSProblem, i::Float64)
+    # if i < p.status.runtime_total
+    #     error("Cannot set runtime limit to lower than the runtime of the previous run")
+    # elseif i <= 0
+    #     error("Runtime limit has to be positive.")
+    # else
+    #     runtime_indexes = _get_conditionindexes(p, RuntimeStoppingCondition)
+    #     for index in runtime_indexes
+    #         p.stoppingconditions[index].limit = i
+    #     end
+    # end
 end

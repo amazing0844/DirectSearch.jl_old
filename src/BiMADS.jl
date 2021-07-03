@@ -32,7 +32,7 @@ function DTLZ2n2(x)
     ff = ones(M);
     ff1(x) = (1 + gx ) * prod(cos.(0.5 * pi * x[1:M-1]));
 
-        ff2(x) = (1 + gx) * prod(cos.(0.5 * pi * x[1:M-2])) * sin(0.5 * pi * x[M - 2+ 1]);
+    ff2(x) = (1 + gx) * prod(cos.(0.5 * pi * x[1:M-2])) * sin(0.5 * pi * x[M - 2+ 1]);
 
 
     return ff1,ff2
@@ -71,8 +71,11 @@ function ex005(x)
 end
 
 # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=50, full_output = false);
-p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=30, full_output = false);
+p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=70, full_output = false);
 # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=50, full_output = false);
+# SetIterationLimit(p,2)
+
+# SetFunctionEvaluationLimit(p,3)
 
 # cons1(x) = x[1] > -1.
 # AddExtremeConstraint(p, cons1)
@@ -132,6 +135,14 @@ function get_Bpoints(p1::DSProblem, p2::DSProblem, flag::Int)
                 push!(temp_Bpoints, B_points([p2.objective(p1.x), p1.x_cost],p1.x))
         end
     end
+
+    Finish(p1)
+
+    if p1.status.optimization_status != MeshPrecisionLimit && p1.status.optimization_status != PollPrecisionLimit
+        error("The $(p1.status.optimization_status_string) is not enough for BiMADS, please increase it")
+    end
+
+
 # display(plot_Bpoint(temp_Bpoints))
     return temp_Bpoints
 end
@@ -244,13 +255,36 @@ function phi(f1::Function,f2::Function, r::Vector{Float64}, x::Vector{Float64})
 end
 
 """
-    reset_p(p::DSProblem)
+    update_p(p::DSProblem)
 reset the reformulated problem for new MADS iteration
+Including reset the Mesh/Poll size, IterationLimit, FunctionEvaluationLimit, RuntimeLimit, etc.
 
 """
-function reset_p(p_init::DSProblem,p_reform::DSProblem)::DSProblem
+function update_p(p_init::DSProblem,p_reform::DSProblem)::DSProblem
     p_reform=deepcopy(p_init)
+
+
 end
+
+function update_p(p,p1::DSProblem,p2::DSProblem)
+    for c in p.stoppingconditions
+        i=_get_conditionindexes(p,typeof(c))[1]
+        if c isa IterationStoppingCondition
+            p.stoppingconditions[i].limit-=p1.status.iteration+p2.status.iteration
+            p.stoppingconditions[i].limit<1 && error("The Iteration limit is not enough for BiMADS, please increase it")
+        elseif s isa FunctionEvaluationStoppingCondition
+            p.stoppingconditions[i].limit-=p1.status.function_evaluations+p2.status.function_evaluations
+            p.stoppingconditions[i].limit<1 && error("The Function evaluation limit is not enough for BiMADS, please increase it")
+        elseif s isa RuntimeStoppingCondition
+            p.stoppingconditions[i].limit -=p1.status.runtime_total+p2.status.runtime_total
+            p.stoppingconditions[i].limit<=0 && error("The Runtime limit is not enough for BiMADS, please increase it")
+        end
+    end
+
+
+
+end
+
 
 """
     Optimize_Bi!(p::DSProblem)
@@ -262,13 +296,11 @@ barrier constraints have been set then the initial point must be value for
 those constraints.
 """
 function Optimize_Bi!(p::DSProblem)
-
+    # term = REPL.Terminals.TTYTerminal("xterm",stdin,stdout,stderr)
+    # REPL.Terminals.raw!(term,true)
+    # Base.start_reading(stdin)
     println("BiMADS")
     p1::DSProblem, p2::DSProblem = p_split(p)
-    #set the iteration limit for sub-problem to default value=1000
-    #could be customize if add attributes in Core.jl in the future
-    SetIterationLimit(p1,1000)
-    SetIterationLimit(p2,1000)
     f1 = p1.objective
     f2 = p2.objective
     p_reform=DSProblem(1)
@@ -278,7 +310,12 @@ function Optimize_Bi!(p::DSProblem)
 # display(plot_Bpoint(undominated_points))
     ref_point=Vector{Float64}()
 
-    n_iteration=1
+    update_p(p,p1,p2)
+
+    n_iteration=0
+    # n_evaluation=p1.status.function_evaluations+p2.status.function_evaluations,
+    # totalTime=p1.status.runtime_total+p2.status.runtime_total]
+
     j = 0     #initial point for the refomulated sigle-obj problem
     δ = 0.0 # quantify the quality of the coverage of the undominated points
             # here is the coverage of the point with largest distance to its adjacent points
@@ -286,7 +323,7 @@ function Optimize_Bi!(p::DSProblem)
     # Main iteration
     while true
         tt=0
-        p_reform=reset_p(p,p_reform)
+        p_reform=update_p(p,p_reform)
         println("Start of iteration",n_iteration)
         #Reference point determination
         j, δ, ref_point=ReferencePointDetermination(undominated_points)
@@ -314,23 +351,36 @@ println("Add new points:",tt)
         #update X_L
         pareto_front(undominated_points)
         println("===============================")
+# length(undominated_points)>=474 && break
         n_iteration>=p.stoppingconditions[1].limit ? (break) : (n_iteration+=1)
         # display(undominated_points)
         # fig2=plot_Bpoint(undominated_points)
         # sort!(undominated_points, by = v -> v.cost, rev = false)
         # display(plot(fig1,fig2,fig3))
+# sleep(2)
+# check()==1 && break
+# if !isempty(input)
+#     println("dd")
+#     display(input)
+#     break
+# end
     end
 println("Total undominated points:", length(undominated_points))
-# fig=plot_Bpoint(undominated_points)
-fig=scatter()
-for i in 1:length(undominated_points)
-    fig=scatter!([undominated_points[i].cost[1]],[undominated_points[i].cost[2]],legend = false)
-end
-# display(fig)
-savefig(fig, "/Users/zyy/Desktop/XJTLU/MSc_Project/Julia/test_julia/Results/C_DS_result_$(p.stoppingconditions[1].limit).pdf");
+        return undominated_points
 end
 
-@time Optimize_Bi!(p)
+@time result=Optimize_Bi!(p)
+
+# fig=plot_Bpoint(result)
+fig=scatter()
+for i in 1:length(result)
+    fig=scatter!([result[i].cost[1]],[result[i].cost[2]],legend = false)
+end
+display(fig)
+# savefig(fig, "/Users/zyy/Desktop/XJTLU/MSc_Project/Julia/test_julia/Results/DS_result_$(p.stoppingconditions[1].limit).pdf");
+
+
+
 
 
 """
