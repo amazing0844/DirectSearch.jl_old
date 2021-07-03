@@ -295,60 +295,60 @@ function SetRuntimeLimit(p::DSProblem, i::Float64)
     end
 end
 
-#Termiated by pressing "q"
-mutable struct ButtonStoppingCondition <: AbstractStoppingCondition
-    limit::String
-end
-
-StoppingConditionStatus(::RuntimeStoppingCondition) = "Terminated by user"
-
-CheckStoppingCondition(p::DSProblem, s::RuntimeStoppingCondition) = readline()=s.limit
-
-
-
-"""
-    SetRuntimeLimit(p::DSProblem, i::Float64)
-
-Set the runtime limit to `i`.
-"""
-function SetButtonLimit(p::DSProblem, i::String)
-
-        runtime_indexes = _get_conditionindexes(p, ButtonStoppingCondition)
-        for index in runtime_indexes
-            p.stoppingconditions[index].limit = i
-        end
-end
-
-
-#pareto front coverage limit
-mutable struct ParetoStoppingCondition <: AbstractStoppingCondition
-    limit::Float64
-end
-
-StoppingConditionStatus(::ParetoStoppingCondition) = "Pareto front coverage limit"
-
-CheckStoppingCondition(p::DSProblem, s::ParetoStoppingCondition) = (time() - p.status.start_time) < s.limit
-
-function init_stoppingcondition(::DSProblem, s::RuntimeStoppingCondition)
-    if s.limit <= 0
-        error("Pareto front coverage limit must be positive.")
-    end
-end
-
-"""
-    SetRuntSetParetoCoverageLimitimeLimit(p::DSProblem, i::Float64)
-
-Set the runtime limit to `i`.
-"""
-function SetParetoCoverageLimit(p::DSProblem, i::Float64)
-    # if i < p.status.runtime_total
-    #     error("Cannot set runtime limit to lower than the runtime of the previous run")
-    # elseif i <= 0
-    #     error("Runtime limit has to be positive.")
-    # else
-    #     runtime_indexes = _get_conditionindexes(p, RuntimeStoppingCondition)
-    #     for index in runtime_indexes
-    #         p.stoppingconditions[index].limit = i
-    #     end
-    # end
-end
+# #Termiated by pressing "q"
+# mutable struct ButtonStoppingCondition <: AbstractStoppingCondition
+#     limit::String
+# end
+#
+# StoppingConditionStatus(::RuntimeStoppingCondition) = "Terminated by user"
+#
+# # CheckStoppingCondition(p::DSProblem, s::RuntimeStoppingCondition) = readline()=s.limit
+#
+#
+#
+# """
+#     SetRuntimeLimit(p::DSProblem, i::Float64)
+#
+# Set the runtime limit to `i`.
+# """
+# function SetButtonLimit(p::DSProblem, i::String)
+#
+#         runtime_indexes = _get_conditionindexes(p, ButtonStoppingCondition)
+#         for index in runtime_indexes
+#             p.stoppingconditions[index].limit = i
+#         end
+# end
+#
+#
+# #pareto front coverage limit
+# mutable struct ParetoStoppingCondition <: AbstractStoppingCondition
+#     limit::Float64
+# end
+#
+# StoppingConditionStatus(::ParetoStoppingCondition) = "Pareto front coverage limit"
+#
+# CheckStoppingCondition(p::DSProblem, s::ParetoStoppingCondition) = (time() - p.status.start_time) < s.limit
+#
+# function init_stoppingcondition(::DSProblem, s::RuntimeStoppingCondition)
+#     if s.limit <= 0
+#         error("Pareto front coverage limit must be positive.")
+#     end
+# end
+#
+# """
+#     SetRuntSetParetoCoverageLimitimeLimit(p::DSProblem, i::Float64)
+#
+# Set the runtime limit to `i`.
+# """
+# function SetParetoCoverageLimit(p::DSProblem, i::Float64)
+#     # if i < p.status.runtime_total
+#     #     error("Cannot set runtime limit to lower than the runtime of the previous run")
+#     # elseif i <= 0
+#     #     error("Runtime limit has to be positive.")
+#     # else
+#     #     runtime_indexes = _get_conditionindexes(p, RuntimeStoppingCondition)
+#     #     for index in runtime_indexes
+#     #         p.stoppingconditions[index].limit = i
+#     #     end
+#     # end
+# end

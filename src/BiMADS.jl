@@ -71,12 +71,12 @@ function ex005(x)
 end
 
 # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=50, full_output = false);
-p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=70, full_output = false);
+p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=55, full_output = false);
 # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=50, full_output = false);
 # SetIterationLimit(p,2)
 
 # SetFunctionEvaluationLimit(p,3)
-
+AddStoppingCondition(p, RuntimeStoppingCondition(0.2))
 # cons1(x) = x[1] > -1.
 # AddExtremeConstraint(p, cons1)
 # cons2(x) = x[1] <1.
@@ -372,11 +372,11 @@ end
 @time result=Optimize_Bi!(p)
 
 # fig=plot_Bpoint(result)
-fig=scatter()
-for i in 1:length(result)
-    fig=scatter!([result[i].cost[1]],[result[i].cost[2]],legend = false)
-end
-display(fig)
+# fig=scatter()
+# for i in 1:length(result)
+#     fig=scatter!([result[i].cost[1]],[result[i].cost[2]],legend = false)
+# end
+# display(fig)
 # savefig(fig, "/Users/zyy/Desktop/XJTLU/MSc_Project/Julia/test_julia/Results/DS_result_$(p.stoppingconditions[1].limit).pdf");
 
 
