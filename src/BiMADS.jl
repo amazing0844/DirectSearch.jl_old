@@ -76,7 +76,7 @@ p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=55, ful
 # SetIterationLimit(p,2)
 
 # SetFunctionEvaluationLimit(p,3)
-AddStoppingCondition(p, RuntimeStoppingCondition(0.2))
+# AddStoppingCondition(p, RuntimeStoppingCondition(0.2))
 # cons1(x) = x[1] > -1.
 # AddExtremeConstraint(p, cons1)
 # cons2(x) = x[1] <1.
@@ -306,15 +306,13 @@ function Optimize_Bi!(p::DSProblem)
     p_reform=DSProblem(1)
     # Initialization
     undominated_points = pareto_front(initial_X_L(p1, p2))
-    # display(undominated_points)
+# display(undominated_points)
 # display(plot_Bpoint(undominated_points))
     ref_point=Vector{Float64}()
 
     update_p(p,p1,p2)
 
     n_iteration=0
-    # n_evaluation=p1.status.function_evaluations+p2.status.function_evaluations,
-    # totalTime=p1.status.runtime_total+p2.status.runtime_total]
 
     j = 0     #initial point for the refomulated sigle-obj problem
     δ = 0.0 # quantify the quality of the coverage of the undominated points
@@ -344,6 +342,7 @@ function Optimize_Bi!(p::DSProblem)
                     tt+=1
             end
         end
+
 # fig2=plot_Bpoint(undominated_points)
 println("Add new points:",tt)
 # display(undominated_points)
