@@ -17,6 +17,30 @@ mutable struct B_points
         return p
     end
 end
+"""
+Status for BiMADS main iteration, also contain stop conditions
+
+"""
+mutable struct BiMADS_status
+    iteration::Int64
+    func_evaluation::Int64
+    total_time::Float64
+    pareto_coverage::Float64
+    opt_status::OptimizationStatus
+    opt_string::String
+    start_time::Float64
+    function BiMADS_status()
+        s=new()
+        s.iteration=0
+        s.func_evaluation=0
+        s.total_time=0.0
+        s.pareto_coverage=0.0
+        s.opt_status=Unoptimized
+        s.opt_string="Unoptimized"
+        s.start_time=time()
+        return s
+    end
+end
 
 function DTLZ2n2(x)
 
@@ -60,10 +84,10 @@ function test1(x)
 end
 
 function test2(x)
-f1(x) = (x[1] + 1) .^ 2 +(x[2] - 1) .^2 -10
-# f2(x) = (x[1] + 12) .^ 2 +(x[2] - 3) .^2 + 20.
-f2(x) = f(x)
-return f1,f2
+    f1(x) = (x[1] + 1) .^ 2 +(x[2] - 1) .^2 -10
+    # f2(x) = (x[1] + 12) .^ 2 +(x[2] - 3) .^2 + 20.
+    f2(x) = f(x)
+    return f1,f2
 end
 
 function ex005(x)
@@ -71,12 +95,12 @@ function ex005(x)
 end
 
 # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=50, full_output = false);
-p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=55, full_output = false);
-# p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=50, full_output = false);
+p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=5000, full_output = false);
+# p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=1000, full_output = false);
 # SetIterationLimit(p,2)
 
-# SetFunctionEvaluationLimit(p,3)
-# AddStoppingCondition(p, RuntimeStoppingCondition(0.2))
+SetFunctionEvaluationLimit(p,50000)
+AddStoppingCondition(p, RuntimeStoppingCondition(0.7))
 # cons1(x) = x[1] > -1.
 # AddExtremeConstraint(p, cons1)
 # cons2(x) = x[1] <1.
@@ -260,31 +284,74 @@ reset the reformulated problem for new MADS iteration
 Including reset the Mesh/Poll size, IterationLimit, FunctionEvaluationLimit, RuntimeLimit, etc.
 
 """
-function update_p(p_init::DSProblem,p_reform::DSProblem)::DSProblem
+function update_p_loop(p_init::DSProblem,p_reform::DSProblem,status::BiMADS_status)
+
+    status.iteration+=p_reform.status.iteration
+    status.func_evaluation+=p_reform.status.function_evaluations
+    status.total_time=p_reform.status.runtime_total
     p_reform=deepcopy(p_init)
 
-
-end
-
-function update_p(p,p1::DSProblem,p2::DSProblem)
     for c in p.stoppingconditions
         i=_get_conditionindexes(p,typeof(c))[1]
         if c isa IterationStoppingCondition
-            p.stoppingconditions[i].limit-=p1.status.iteration+p2.status.iteration
+            p_reform.stoppingconditions[i].limit=p_init.stoppingconditions[i].limit-status.iteration
+        elseif c isa FunctionEvaluationStoppingCondition
+            p_reform.stoppingconditions[i].limit=p_init.stoppingconditions[i].limit-status.func_evaluation
+        # elseif c isa RuntimeStoppingCondition
+        #     p_reform.stoppingconditions[i].limit =p_init.stoppingconditions[i].limit-status.total_time
+        end
+    end
+    return p_reform
+end
+
+function update_p_init(p,p1::DSProblem,p2::DSProblem,status::BiMADS_status)
+    for c in p.stoppingconditions
+        i=_get_conditionindexes(p,typeof(c))[1]
+        if c isa IterationStoppingCondition
+            status.iteration=p1.status.iteration+p2.status.iteration
+            p.stoppingconditions[i].limit-=status.iteration
             p.stoppingconditions[i].limit<1 && error("The Iteration limit is not enough for BiMADS, please increase it")
-        elseif s isa FunctionEvaluationStoppingCondition
-            p.stoppingconditions[i].limit-=p1.status.function_evaluations+p2.status.function_evaluations
+        elseif c isa FunctionEvaluationStoppingCondition
+            status.func_evaluation=p1.status.function_evaluations+p2.status.function_evaluations
+            p.stoppingconditions[i].limit-=status.func_evaluation
             p.stoppingconditions[i].limit<1 && error("The Function evaluation limit is not enough for BiMADS, please increase it")
-        elseif s isa RuntimeStoppingCondition
-            p.stoppingconditions[i].limit -=p1.status.runtime_total+p2.status.runtime_total
-            p.stoppingconditions[i].limit<=0 && error("The Runtime limit is not enough for BiMADS, please increase it")
+        # elseif c isa RuntimeStoppingCondition
+        #     status.total_time=p1.status.runtime_total+p2.status.runtime_total
+            # p.stoppingconditions[i].limit -=status.total_time
+            # p.stoppingconditions[i].limit<=0 && error("The Runtime limit is not enough for BiMADS, please increase it")
+        end
+    end
+end
+
+function update_p_end(p_reform::DSProblem,status::BiMADS_status)
+    for c in p.stoppingconditions
+        i=_get_conditionindexes(p,typeof(c))[1]
+        if c isa IterationStoppingCondition
+            status.iteration+=p_reform.status.iteration
+        elseif c isa FunctionEvaluationStoppingCondition
+            status.func_evaluation+=p_reform.status.function_evaluations
+        # elseif c isa RuntimeStoppingCondition
+        #     status.total_time+=p_reform.status.runtime_total
+        end
+    end
+end
+
+function checkBiMADSStopping(p::DSProblem,status::BiMADS_status)::Bool
+    # if p1.status.optimization_status != MeshPrecisionLimit && p1.status.optimization_status != PollPrecisionLimit
+
+    if p.status.optimization_status!=PollPrecisionLimit &&p.status.optimization_status!=MeshPrecisionLimit
+        return false
+    end
+
+    for c in p.stoppingconditions
+        i=_get_conditionindexes(p,RuntimeStoppingCondition)[1]
+        if c isa RuntimeStoppingCondition
+            (time()-status.start_time)>=p.stoppingconditions[i].limit && return false
         end
     end
 
-
-
+    return true
 end
-
 
 """
     Optimize_Bi!(p::DSProblem)
@@ -300,29 +367,29 @@ function Optimize_Bi!(p::DSProblem)
     # REPL.Terminals.raw!(term,true)
     # Base.start_reading(stdin)
     println("BiMADS")
+    status=BiMADS_status()
     p1::DSProblem, p2::DSProblem = p_split(p)
     f1 = p1.objective
     f2 = p2.objective
-    p_reform=DSProblem(1)
     # Initialization
     undominated_points = pareto_front(initial_X_L(p1, p2))
 # display(undominated_points)
 # display(plot_Bpoint(undominated_points))
+
+    p_reform=deepcopy(p)
+    update_p_init(p_reform,p1,p2,status)
+
+    iteration_count=0
     ref_point=Vector{Float64}()
-
-    update_p(p,p1,p2)
-
-    n_iteration=0
-
     j = 0     #initial point for the refomulated sigle-obj problem
     δ = 0.0 # quantify the quality of the coverage of the undominated points
             # here is the coverage of the point with largest distance to its adjacent points
 
     # Main iteration
     while true
-        tt=0
-        p_reform=update_p(p,p_reform)
-        println("Start of iteration",n_iteration)
+        count=0
+        println("===============================")
+        println("Start of iteration ",iteration_count)
         #Reference point determination
         j, δ, ref_point=ReferencePointDetermination(undominated_points)
         println("j=",j,"  ref=",ref_point)
@@ -332,29 +399,33 @@ function Optimize_Bi!(p::DSProblem)
         SetInitialPoint(p_reform,undominated_points[j].x_now)
 
 # fig1=plot_Bpoint(undominated_points)
-# p_reform.full_output=false
+# p_reform.full_output=true
         #run MADS for refomulated problem and add new undominated points
         Setup(p_reform)
         while _check_stoppingconditions(p_reform)
             p_reform.full_output && OutputIterationDetails(p_reform)
             if OptimizeLoop(p_reform) == Dominating
                     push!(undominated_points, B_points([p1.objective(p_reform.x), p2.objective(p_reform.x)],p_reform.x))
-                    tt+=1
+                    count+=1
             end
         end
-
+        # p_reform.status.runtime_total = time() - p_reform.status.start_time
+        p_reform.status.runtime_total = time() - status.start_time
 # fig2=plot_Bpoint(undominated_points)
-println("Add new points:",tt)
+        println("Add new points:",count)
 # display(undominated_points)
 
         #update X_L
         pareto_front(undominated_points)
-        println("===============================")
+
+        iteration_count+=1
+
+        !checkBiMADSStopping(p_reform,status) && break
+        p_reform=update_p_loop(p,p_reform,status)
 # length(undominated_points)>=474 && break
-        n_iteration>=p.stoppingconditions[1].limit ? (break) : (n_iteration+=1)
+        # n_iteration>=p.stoppingconditions[1].limit ? (n_iteration+=1) : (n_iteration+=1)
         # display(undominated_points)
         # fig2=plot_Bpoint(undominated_points)
-        # sort!(undominated_points, by = v -> v.cost, rev = false)
         # display(plot(fig1,fig2,fig3))
 # sleep(2)
 # check()==1 && break
@@ -364,13 +435,20 @@ println("Add new points:",tt)
 #     break
 # end
     end
-println("Total undominated points:", length(undominated_points))
-        return undominated_points
+    println("===============================")
+    println("Total undominated points:", length(undominated_points))
+    update_p_end(p_reform,status)
+    println("Total Iteration: ",status.iteration)
+    println("Total Function Evaluation: ",status.func_evaluation)
+    println("Total Run Time: ",status.total_time)
+    println("Total Run Time: ",time()-p1.status.start_time)
+    println("===============================")
+    return undominated_points
 end
 
 @time result=Optimize_Bi!(p)
 
-# fig=plot_Bpoint(result)
+
 # fig=scatter()
 # for i in 1:length(result)
 #     fig=scatter!([result[i].cost[1]],[result[i].cost[2]],legend = false)
