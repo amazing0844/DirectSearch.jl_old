@@ -1,12 +1,13 @@
 using Plots
+using Statistics,REPL
 export p_dim, testbi
 #TODO BiMADS
-
+logocolors = Colors.JULIA_LOGO_COLORS
 """
 points for BiMADS Algo on the BiMADS map
 """
 mutable struct B_points
-    cost::Vector{Float64}  #f1 and f2 vale on BiMADS map
+    cost::Vector{Float64}  #f1 and f2 value on BiMADS map
     x_now::Vector{Float64}
     weight::Int            #weight for each undominated point to determine the δ
     function B_points(cost::Vector{Float64},x::Vector{Float64}, w::Int=0)
@@ -95,12 +96,12 @@ function ex005(x)
 end
 
 # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=50, full_output = false);
-p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=5000, full_output = false);
+p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=100, full_output = false);
 # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=1000, full_output = false);
 # SetIterationLimit(p,2)
 
-SetFunctionEvaluationLimit(p,50000)
-AddStoppingCondition(p, RuntimeStoppingCondition(0.7))
+SetFunctionEvaluationLimit(p,500000)
+# AddStoppingCondition(p, RuntimeStoppingCondition(1.5))
 # cons1(x) = x[1] > -1.
 # AddExtremeConstraint(p, cons1)
 # cons2(x) = x[1] <1.
@@ -109,7 +110,7 @@ AddStoppingCondition(p, RuntimeStoppingCondition(0.7))
 function plot_Bpoint(points::Vector{B_points})
     fig = Plots.scatter()
     for i = 1:length(points)
-        fig = Plots.scatter!([points[i].cost[1]],[points[i].cost[2]],legend = false,show = true,)
+        fig = plot!([points[i].cost[1]],[points[i].cost[2]],seriestype = :scatter,aspect_ratio=1,legend = false,color=logocolors.red,show = true)
     end
 return fig
 end
@@ -121,6 +122,15 @@ function get_adj_dis(points::Vector{B_points})
     end
     println("-----------------")
 end
+
+function paretoCoverage(paretoSet::Vector{B_points})::Tuple{Float64,Float64}
+    points=Vector{Float64}()
+    for i=1:length(paretoSet)-1
+        push!(points,LinearAlgebra.norm(paretoSet[i+1].cost - paretoSet[i].cost)^2)
+    end
+    return mean(points), std(points)
+end
+
 
 """
     p_split(p::DSProblem)::Tuple{DSProblem,DSProblem}
@@ -165,9 +175,6 @@ function get_Bpoints(p1::DSProblem, p2::DSProblem, flag::Int)
     if p1.status.optimization_status != MeshPrecisionLimit && p1.status.optimization_status != PollPrecisionLimit
         error("The $(p1.status.optimization_status_string) is not enough for BiMADS, please increase it")
     end
-
-
-# display(plot_Bpoint(temp_Bpoints))
     return temp_Bpoints
 end
 
@@ -205,11 +212,6 @@ function initial_X_L(p1, p2)::Vector{B_points}
     x_L = reverse(x_L)
     # optmization for p2
     append!(x_L, get_Bpoints(p2, p1, 2))
-
-
-    # display(x_L)
-    # get_adj_dis(x_L)
-    # display(plot_Bpoint(x_L))
     return x_L
 end
 
@@ -315,10 +317,10 @@ function update_p_init(p,p1::DSProblem,p2::DSProblem,status::BiMADS_status)
             status.func_evaluation=p1.status.function_evaluations+p2.status.function_evaluations
             p.stoppingconditions[i].limit-=status.func_evaluation
             p.stoppingconditions[i].limit<1 && error("The Function evaluation limit is not enough for BiMADS, please increase it")
-        # elseif c isa RuntimeStoppingCondition
-        #     status.total_time=p1.status.runtime_total+p2.status.runtime_total
-            # p.stoppingconditions[i].limit -=status.total_time
-            # p.stoppingconditions[i].limit<=0 && error("The Runtime limit is not enough for BiMADS, please increase it")
+        elseif c isa RuntimeStoppingCondition
+            status.total_time=p1.status.runtime_total+p2.status.runtime_total
+            p.stoppingconditions[i].limit -=status.total_time
+            p.stoppingconditions[i].limit<=0 && error("The Runtime limit is not enough for BiMADS, please increase it")
         end
     end
 end
@@ -337,17 +339,24 @@ function update_p_end(p_reform::DSProblem,status::BiMADS_status)
 end
 
 function checkBiMADSStopping(p::DSProblem,status::BiMADS_status)::Bool
-    # if p1.status.optimization_status != MeshPrecisionLimit && p1.status.optimization_status != PollPrecisionLimit
-
     if p.status.optimization_status!=PollPrecisionLimit &&p.status.optimization_status!=MeshPrecisionLimit
+        status.opt_status=p.status.optimization_status
         return false
     end
 
     for c in p.stoppingconditions
-        i=_get_conditionindexes(p,RuntimeStoppingCondition)[1]
         if c isa RuntimeStoppingCondition
+            status.opt_status=RuntimeLimit
+            i=_get_conditionindexes(p,RuntimeStoppingCondition)[1]
             (time()-status.start_time)>=p.stoppingconditions[i].limit && return false
         end
+    end
+
+    bb = bytesavailable(stdin)
+    if bb>0
+        println("quit")
+        status.opt_status=KeyInterrupt
+        return false
     end
 
     return true
@@ -363,9 +372,9 @@ barrier constraints have been set then the initial point must be value for
 those constraints.
 """
 function Optimize_Bi!(p::DSProblem)
-    # term = REPL.Terminals.TTYTerminal("xterm",stdin,stdout,stderr)
-    # REPL.Terminals.raw!(term,true)
-    # Base.start_reading(stdin)
+# term = REPL.Terminals.TTYTerminal("xterm",stdin,stdout,stderr)
+# REPL.Terminals.raw!(term,true)
+# Base.start_reading(stdin)
     println("BiMADS")
     status=BiMADS_status()
     p1::DSProblem, p2::DSProblem = p_split(p)
@@ -384,7 +393,8 @@ function Optimize_Bi!(p::DSProblem)
     j = 0     #initial point for the refomulated sigle-obj problem
     δ = 0.0 # quantify the quality of the coverage of the undominated points
             # here is the coverage of the point with largest distance to its adjacent points
-
+# fig1=plot_Bpoint(undominated_points)
+# fig2=plot_Bpoint(undominated_points)
     # Main iteration
     while true
         count=0
@@ -407,13 +417,15 @@ function Optimize_Bi!(p::DSProblem)
             if OptimizeLoop(p_reform) == Dominating
                     push!(undominated_points, B_points([p1.objective(p_reform.x), p2.objective(p_reform.x)],p_reform.x))
                     count+=1
+# plot!(fig2,[p1.objective(p_reform.x)],[p2.objective(p_reform.x)],seriestype = :scatter,color=logocolors.blue)
             end
         end
         # p_reform.status.runtime_total = time() - p_reform.status.start_time
         p_reform.status.runtime_total = time() - status.start_time
 # fig2=plot_Bpoint(undominated_points)
+
         println("Add new points:",count)
-# display(undominated_points)
+# display(fig2)
 
         #update X_L
         pareto_front(undominated_points)
@@ -425,8 +437,9 @@ function Optimize_Bi!(p::DSProblem)
 # length(undominated_points)>=474 && break
         # n_iteration>=p.stoppingconditions[1].limit ? (n_iteration+=1) : (n_iteration+=1)
         # display(undominated_points)
-        # fig2=plot_Bpoint(undominated_points)
-        # display(plot(fig1,fig2,fig3))
+        # fig3=plot_Bpoint(undominated_points)
+        # figall=plot(fig2,fig3,aspect_ratio=1)
+        # savefig(figall, "/Users/zyy/Desktop/XJTLU/MSc_Project/Julia/test_julia/Results/DS_result_$(iteration_count-1).pdf");
 # sleep(2)
 # check()==1 && break
 # if !isempty(input)
@@ -435,25 +448,27 @@ function Optimize_Bi!(p::DSProblem)
 #     break
 # end
     end
+
     println("===============================")
     println("Total undominated points:", length(undominated_points))
     update_p_end(p_reform,status)
-    println("Total Iteration: ",status.iteration)
-    println("Total Function Evaluation: ",status.func_evaluation)
-    println("Total Run Time: ",status.total_time)
+    println("Total Iterations: ",status.iteration)
+    println("Total Function Evaluations: ",status.func_evaluation)
     println("Total Run Time: ",time()-p1.status.start_time)
+    println("Optimization Status: ",status.opt_status)
     println("===============================")
     return undominated_points
 end
 
-@time result=Optimize_Bi!(p)
+@time result=Optimize!(p)
 
+# display(paretoCoverage(result))
 
 # fig=scatter()
 # for i in 1:length(result)
-#     fig=scatter!([result[i].cost[1]],[result[i].cost[2]],legend = false)
+#     fig=scatter!([result[i].cost[1]],[result[i].cost[2]],color=logocolors.red,legend = false)
 # end
-# display(fig)
+# # display(fig)
 # savefig(fig, "/Users/zyy/Desktop/XJTLU/MSc_Project/Julia/test_julia/Results/DS_result_$(p.stoppingconditions[1].limit).pdf");
 
 

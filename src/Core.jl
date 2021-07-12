@@ -292,6 +292,7 @@ end
 # end
 
 
+
 """
     Optimize!(p::DSProblem)
 
@@ -303,9 +304,9 @@ those constraints.
 """
 
 function Optimize!(p::DSProblem)
-# term = REPL.Terminals.TTYTerminal("xterm",stdin,stdout,stderr)
-# REPL.Terminals.raw!(term,true)
-# Base.start_reading(stdin)
+term = REPL.Terminals.TTYTerminal("xterm",stdin,stdout,stderr)
+REPL.Terminals.raw!(term,true)
+Base.start_reading(stdin)
 
     # check the dimension of the problem
     if p_dim(p)==2

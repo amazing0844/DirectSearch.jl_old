@@ -38,7 +38,7 @@ abstract type AbstractStoppingCondition end
 
 @enum ProblemSense Min Max
 
-@enum OptimizationStatus Unoptimized MeshPrecisionLimit PollPrecisionLimit IterationLimit FunctionEvaluationLimit RuntimeLimit OtherStoppingCondition
+@enum OptimizationStatus Unoptimized MeshPrecisionLimit PollPrecisionLimit IterationLimit FunctionEvaluationLimit RuntimeLimit KeyInterrupt OtherStoppingCondition
 
 """
     Config{FT}(N::Int,
