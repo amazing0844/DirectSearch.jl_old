@@ -5,7 +5,7 @@ using REPL
 
 export DSProblem, SetObjective, SetInitialPoint, SetVariableBound, SetMaxEvals,
        SetOpportunisticEvaluation, SetSense, SetVariableBounds, Optimize!, SetGranularity,
-       SetGranularities,check
+       SetGranularities
 
 
 """
@@ -318,12 +318,6 @@ Base.start_reading(stdin)
     while _check_stoppingconditions(p)
         p.full_output && OutputIterationDetails(p)
         OptimizeLoop(p)
-        # sleep(2)
-        # check()==1 && break
-        # if !isempty(input)
-        #     display(input)
-        #     break
-        # end
     end
 
     Finish(p)

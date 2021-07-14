@@ -10,4 +10,4 @@ include("./test_Core.jl")
 include("./test_StoppingCondition.jl")
 include("./test_Report.jl")
 include("./solve_tests.jl")
-
+include("./test_BiMADS.jl")

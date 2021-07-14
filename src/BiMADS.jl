@@ -1,6 +1,6 @@
 using Plots
 using Statistics,REPL
-export p_dim, testbi
+export p_dim, testbi, B_points, BiMADS_status
 #TODO BiMADS
 logocolors = Colors.JULIA_LOGO_COLORS
 """
@@ -78,9 +78,9 @@ function f(x::Vector{Float64})
 end
 
 function test1(x)
-    f1(x) = (x[1] + 2) .^ 2  - 10.0
+    f1(x) = ((x[1] + 2) .^ 2  - 10.0)
     # f2(x) = f(x)
-    f2(x) = (x[1] -2) .^ 2 +20
+    f2(x) = ((x[1] -2) .^ 2 +20)
     return f1, f2
 end
 
@@ -88,7 +88,7 @@ function test2(x)
     f1(x) = (x[1] + 1) .^ 2 +(x[2] - 1) .^2 -10
     # f2(x) = (x[1] + 12) .^ 2 +(x[2] - 3) .^2 + 20.
     f2(x) = f(x)
-    return f1,f2
+    return f1*10,f2*10
 end
 
 function ex005(x)
@@ -96,7 +96,7 @@ function ex005(x)
 end
 
 # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=50, full_output = false);
-p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=100, full_output = false);
+p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=500, full_output = false);
 # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=1000, full_output = false);
 # SetIterationLimit(p,2)
 
@@ -129,6 +129,22 @@ function paretoCoverage(paretoSet::Vector{B_points})::Tuple{Float64,Float64}
         push!(points,LinearAlgebra.norm(paretoSet[i+1].cost - paretoSet[i].cost)^2)
     end
     return mean(points), std(points)
+end
+
+function hvIndicator(paretoSet::Vector{B_points},factor=1.1)::Float64
+    points=Vector{Vector{Float64}}()
+    for i=1:length(paretoSet)-1
+        push!(points,paretoSet[i].cost)
+    end
+     ref=factor.*[last(points)[1],first(points)[2]]
+     normalize_factor=(ref[1]-first(points)[1]).*(ref[2]-last(points)[2])./2
+     hv_volume=0.
+     area(x::Vector{Float64},y::Vector{Float64})=(abs(x[1]-y[1])).*(abs(x[2]-y[2]))
+     for p in points
+         hv_volume+=area(ref,p)
+         ref[2]=p[2]
+     end
+     return hv_volume/normalize_factor
 end
 
 
@@ -270,12 +286,9 @@ single-obj problem. Return the cost of the refomulated objective function
 x is the point to be evaluated, r is the reference point
 """
 function phi(f1::Function,f2::Function, r::Vector{Float64}, x::Vector{Float64})
-        # @show x
     if (f1(x) <= r[1]) && (f2(x) <= r[2]) #if x dominant r
-        # @show -(r[1] - f1(x))^2 * (r[2] - f2(x))^2
         return -(r[1] - f1(x))^2 * (r[2] - f2(x))^2
     else
-        # @show (max(f1(x) - r[1], 0))^2 + (max(f2(x) - r[2], 0))^2
         return (max(f1(x) - r[1], 0))^2 + (max(f2(x) - r[2], 0))^2
     end
 end
@@ -372,9 +385,6 @@ barrier constraints have been set then the initial point must be value for
 those constraints.
 """
 function Optimize_Bi!(p::DSProblem)
-# term = REPL.Terminals.TTYTerminal("xterm",stdin,stdout,stderr)
-# REPL.Terminals.raw!(term,true)
-# Base.start_reading(stdin)
     println("BiMADS")
     status=BiMADS_status()
     p1::DSProblem, p2::DSProblem = p_split(p)
@@ -420,7 +430,6 @@ function Optimize_Bi!(p::DSProblem)
 # plot!(fig2,[p1.objective(p_reform.x)],[p2.objective(p_reform.x)],seriestype = :scatter,color=logocolors.blue)
             end
         end
-        # p_reform.status.runtime_total = time() - p_reform.status.start_time
         p_reform.status.runtime_total = time() - status.start_time
 # fig2=plot_Bpoint(undominated_points)
 
@@ -461,9 +470,9 @@ function Optimize_Bi!(p::DSProblem)
 end
 
 @time result=Optimize!(p)
-
-# display(paretoCoverage(result))
-
+# display(result)
+display(paretoCoverage(result))
+display(hvIndicator(result))
 # fig=scatter()
 # for i in 1:length(result)
 #     fig=scatter!([result[i].cost[1]],[result[i].cost[2]],color=logocolors.red,legend = false)
