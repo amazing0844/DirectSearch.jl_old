@@ -13,10 +13,6 @@ end
 
 _check_stoppingconditions(p::DSProblem) = _check_stoppingconditions(p, p.stoppingconditions)
 function _check_stoppingconditions(p::DSProblem, c::Vector{T}) where T <: AbstractStoppingCondition
-    # term = REPL.Terminals.TTYTerminal("xterm",stdin,stdout,stderr)
-    # REPL.Terminals.raw!(term,true)
-    # Base.start_reading(stdin)
-    # check()==1 && return false
     for condition in c
         #Stopping conditions return true if optimisation should continue,
         #false if the condition is met and optimisation should stop
@@ -289,6 +285,36 @@ function SetRuntimeLimit(p::DSProblem, i::Float64)
         error("Runtime limit has to be positive.")
     else
         runtime_indexes = _get_conditionindexes(p, RuntimeStoppingCondition)
+        for index in runtime_indexes
+            p.stoppingconditions[index].limit = i
+        end
+    end
+end
+
+#Pareto front hyper-volume limit (Bimads only)
+mutable struct HypervolumeStoppingCondition <: AbstractStoppingCondition
+    limit::Float64
+end
+
+StoppingConditionStatus(::HypervolumeStoppingCondition) = "Hyper-Volume limit"
+
+# function init_stoppingcondition(::DSProblem, s::HypervolumeStoppingCondition)
+#     if s.limit <= 0
+#         error("Hyper-Volume limit must be positive.")
+#     end
+# end
+CheckStoppingCondition(p::DSProblem, s::HypervolumeStoppingCondition) = true
+
+"""
+    SetHypervolumeLimit(p::DSProblem, i::Float64)
+
+Set the Hyper-Volume limit to `i`.
+"""
+function SetHypervolumeLimit(p::DSProblem, i::Float64)
+    if i <= 0
+        error("Hyper-Volume limit has to be positive.")
+    else
+        runtime_indexes = _get_conditionindexes(p, HypervolumeStoppingCondition)
         for index in runtime_indexes
             p.stoppingconditions[index].limit = i
         end

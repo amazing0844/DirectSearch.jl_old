@@ -1,6 +1,6 @@
 using Plots
-using Statistics,REPL
-export p_dim, testbi, B_points, BiMADS_status
+using Statistics
+export p_dim,  hvIndicator
 #TODO BiMADS
 logocolors = Colors.JULIA_LOGO_COLORS
 """
@@ -26,7 +26,7 @@ mutable struct BiMADS_status
     iteration::Int64
     func_evaluation::Int64
     total_time::Float64
-    pareto_coverage::Float64
+    hypervolume::Float64
     opt_status::OptimizationStatus
     opt_string::String
     start_time::Float64
@@ -35,7 +35,7 @@ mutable struct BiMADS_status
         s.iteration=0
         s.func_evaluation=0
         s.total_time=0.0
-        s.pareto_coverage=0.0
+        s.hypervolume=0.0
         s.opt_status=Unoptimized
         s.opt_string="Unoptimized"
         s.start_time=time()
@@ -102,6 +102,7 @@ p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=500, fu
 
 SetFunctionEvaluationLimit(p,500000)
 # AddStoppingCondition(p, RuntimeStoppingCondition(1.5))
+# AddStoppingCondition(p, HypervolumeStoppingCondition(1.2))
 # cons1(x) = x[1] > -1.
 # AddExtremeConstraint(p, cons1)
 # cons2(x) = x[1] <1.
@@ -131,6 +132,13 @@ function paretoCoverage(paretoSet::Vector{B_points})::Tuple{Float64,Float64}
     return mean(points), std(points)
 end
 
+
+"""
+    hvIndicator(paretoSet::Vector{B_points},factor=1.1)::Float64
+
+Hyper-Volume indicator for evalating the Pareto Front
+factor is used for choosing the referencepoint for hypervolume calculation
+"""
 function hvIndicator(paretoSet::Vector{B_points},factor=1.1)::Float64
     points=Vector{Vector{Float64}}()
     for i=1:length(paretoSet)-1
@@ -351,7 +359,7 @@ function update_p_end(p_reform::DSProblem,status::BiMADS_status)
     end
 end
 
-function checkBiMADSStopping(p::DSProblem,status::BiMADS_status)::Bool
+function checkBiMADSStopping(p::DSProblem,status::BiMADS_status,undominated_points::Vector{B_points})::Bool
     if p.status.optimization_status!=PollPrecisionLimit &&p.status.optimization_status!=MeshPrecisionLimit
         status.opt_status=p.status.optimization_status
         return false
@@ -362,6 +370,12 @@ function checkBiMADSStopping(p::DSProblem,status::BiMADS_status)::Bool
             status.opt_status=RuntimeLimit
             i=_get_conditionindexes(p,RuntimeStoppingCondition)[1]
             (time()-status.start_time)>=p.stoppingconditions[i].limit && return false
+        end
+        if c isa HypervolumeStoppingCondition
+            status.opt_status=HypervolumeLimit
+            i=_get_conditionindexes(p,HypervolumeStoppingCondition)[1]
+            status.hypervolume=hvIndicator(undominated_points)
+            status.hypervolume>=p.stoppingconditions[i].limit && return false
         end
     end
 
@@ -441,7 +455,7 @@ function Optimize_Bi!(p::DSProblem)
 
         iteration_count+=1
 
-        !checkBiMADSStopping(p_reform,status) && break
+        !checkBiMADSStopping(p_reform,status,undominated_points) && break
         p_reform=update_p_loop(p,p_reform,status)
 # length(undominated_points)>=474 && break
         # n_iteration>=p.stoppingconditions[1].limit ? (n_iteration+=1) : (n_iteration+=1)

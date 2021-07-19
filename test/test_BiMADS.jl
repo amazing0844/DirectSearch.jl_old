@@ -27,6 +27,10 @@
         @test typeof(s.start_time)==Float64
     end
 
+    @testset "Pareto_Evaluation" begin
+
+    end
+
     @testset "Initialization" begin
         p = DSProblem(2; objective = test);
         @test p_dim(p)==2

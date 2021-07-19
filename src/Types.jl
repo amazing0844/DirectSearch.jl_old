@@ -38,7 +38,7 @@ abstract type AbstractStoppingCondition end
 
 @enum ProblemSense Min Max
 
-@enum OptimizationStatus Unoptimized MeshPrecisionLimit PollPrecisionLimit IterationLimit FunctionEvaluationLimit RuntimeLimit KeyInterrupt OtherStoppingCondition
+@enum OptimizationStatus Unoptimized MeshPrecisionLimit PollPrecisionLimit IterationLimit FunctionEvaluationLimit RuntimeLimit KeyInterrupt HypervolumeLimit OtherStoppingCondition
 
 """
     Config{FT}(N::Int,
@@ -106,7 +106,7 @@ mutable struct Status{T}
     iteration::Int64
     directions::Union{Vector{Vector{T}}, Nothing}
     success_direction::Union{Vector{T},Nothing}
-    paretoCoverage::Float64
+    # paretoCoverage::Float64
 
     optimization_status::OptimizationStatus
     optimization_status_string::String
@@ -131,7 +131,7 @@ mutable struct Status{T}
         s.success_direction = nothing
         s.optimization_status_string = "Unoptimized"
         s.optimization_status = Unoptimized
-        s.paretoCoverage=0.0
+        # s.paretoCoverage=0.0
 
         s.runtime_total = 0.0
         s.search_time_total = 0.0
