@@ -1,0 +1,509 @@
+        - using Plots
+        - using Statistics
+        - export p_dim,  hvIndicator
+        - #TODO BiMADS
+        - logocolors = Colors.JULIA_LOGO_COLORS
+        - """
+        - points for BiMADS Algo on the BiMADS map
+        - """
+        - mutable struct B_points
+        -     cost::Vector{Float64}  #f1 and f2 value on BiMADS map
+        -     x_now::Vector{Float64}
+        -     weight::Int            #weight for each undominated point to determine the δ
+        4     function B_points(cost::Vector{Float64},x::Vector{Float64}, w::Int=0)
+     3168         p = new()
+     1584         p.cost = cost
+     1584         p.x_now=x
+     1584         p.weight = w
+     1584         return p
+        -     end
+        - end
+        - """
+        - Status for BiMADS main iteration, also contain stop conditions
+        - 
+        - """
+        - mutable struct BiMADS_status
+        -     iteration::Int64
+        -     func_evaluation::Int64
+        -     total_time::Float64
+        -     hypervolume::Float64
+        -     opt_status::OptimizationStatus
+        -     opt_string::String
+        -     start_time::Float64
+        4     function BiMADS_status()
+       12         s=new()
+       12         s.iteration=0
+       12         s.func_evaluation=0
+       12         s.total_time=0.0
+       12         s.hypervolume=0.0
+       12         s.opt_status=Unoptimized
+       12         s.opt_string="Unoptimized"
+       12         s.start_time=time()
+       12         return s
+        -     end
+        - end
+        - 
+        - function DTLZ2n2(x)
+        - 
+        -     # params
+        -     M = 2; # Number of objectives
+        -     n = 2; # Number of variables
+        -     k = n - M + 1;
+        - 
+        -     # g(x)
+        -     gx = sum((x[M:n] .- 0.5).^2);
+        - 
+        -     # functions
+        -     ff = ones(M);
+        -     ff1(x) = (1 + gx ) * prod(cos.(0.5 * pi * x[1:M-1]));
+        - 
+        -     ff2(x) = (1 + gx) * prod(cos.(0.5 * pi * x[1:M-2])) * sin(0.5 * pi * x[M - 2+ 1]);
+        - 
+        - 
+        -     return ff1,ff2
+        - 
+        - end
+        - 
+        - function s(x)
+        -     return abs(floor(x + 1 / 2) - x)
+        - end
+        - 
+        - function f(x::Vector{Float64})
+        -     Taka = 0
+        -     w = 0.9
+        -     for n = 1:100
+        -         Taka -= w^n * s(2^n * x[1])
+        -     end
+        -     return Taka
+        - end
+        - 
+        - function test1(x)
+        -     f1(x) = ((x[1] + 2) .^ 2  - 10.0)
+        -     # f2(x) = f(x)
+        -     f2(x) = ((x[1] -2) .^ 2 +20)
+        -     return f1, f2
+        - end
+        - 
+        - function test2(x)
+        -     f1(x) = (x[1] + 1) .^ 2 +(x[2] - 1) .^2 -10
+        -     # f2(x) = (x[1] + 12) .^ 2 +(x[2] - 3) .^2 + 20.
+        -     f2(x) = f(x)
+        -     return f1*10,f2*10
+        - end
+        - 
+        - function ex005(x)
+        -     return [x[1]^2 - x[2]^2; x[1] / x[2]]
+        - end
+        - 
+        - # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=50, full_output = false);
+        - p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=500, full_output = false);
+        - # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=1000, full_output = false);
+        - # SetIterationLimit(p,2)
+        - 
+        - SetFunctionEvaluationLimit(p,500000)
+        - # AddStoppingCondition(p, RuntimeStoppingCondition(1.5))
+        - # AddStoppingCondition(p, HypervolumeStoppingCondition(1.2))
+        - # cons1(x) = x[1] > -1.
+        - # AddExtremeConstraint(p, cons1)
+        - # cons2(x) = x[1] <1.
+        - # AddExtremeConstraint(p, cons2)
+        - 
+        - function plot_Bpoint(points::Vector{B_points})
+        -     fig = Plots.scatter()
+        -     for i = 1:length(points)
+        -         fig = plot!([points[i].cost[1]],[points[i].cost[2]],seriestype = :scatter,aspect_ratio=1,legend = false,color=logocolors.red,show = true)
+        -     end
+        - return fig
+        - end
+        - 
+        - function get_adj_dis(points::Vector{B_points})
+        -     println("-----------------")
+        -     for i=1:length(points)-1
+        -         display(LinearAlgebra.norm(points[i+1].cost - points[i].cost)^2)
+        -     end
+        -     println("-----------------")
+        - end
+        - 
+        - function paretoCoverage(paretoSet::Vector{B_points})::Tuple{Float64,Float64}
+        -     points=Vector{Float64}()
+        -     for i=1:length(paretoSet)-1
+        -         push!(points,LinearAlgebra.norm(paretoSet[i+1].cost - paretoSet[i].cost)^2)
+        -     end
+        -     return mean(points), std(points)
+        - end
+        - 
+        - 
+        - """
+        -     hvIndicator(paretoSet::Vector{B_points},factor=1.1)::Float64
+        - 
+        - Hyper-Volume indicator for evalating the Pareto Front
+        - factor is used for choosing the referencepoint for hypervolume calculation
+        - """
+       16 function hvIndicator(paretoSet::Vector{B_points},factor=1.1)::Float64
+       16     points=Vector{Vector{Float64}}()
+       16     for i=1:length(paretoSet)-1
+     2912         push!(points,paretoSet[i].cost)
+        -     end
+       16      ref=factor.*[last(points)[1],first(points)[2]]
+        8      normalize_factor=(ref[1]-first(points)[1]).*(ref[2]-last(points)[2])./2
+        8      hv_volume=0.
+     1468      area(x::Vector{Float64},y::Vector{Float64})=(abs(x[1]-y[1])).*(abs(x[2]-y[2]))
+        8      for p in points
+     1460          hv_volume+=area(ref,p)
+     1468          ref[2]=p[2]
+        -      end
+        8      return hv_volume/normalize_factor
+        - end
+        - 
+        - 
+        - """
+        -     p_split(p::DSProblem)::Tuple{DSProblem,DSProblem}
+        - 
+        - To split Bi-obj problem into two single obj problems
+        - """
+       16 function p_split(p::DSProblem)::Tuple{DSProblem,DSProblem}
+       32     x = zeros(Float64, p.N)
+       16     f1, f2 = p.objective(x)
+       16     p1::DSProblem = deepcopy(p::DSProblem)
+       16     p2::DSProblem = deepcopy(p::DSProblem)
+       16     SetObjective(p1, f1)
+       16     SetObjective(p2, f2)
+       16     return p1, p2
+        - end
+        - 
+        - """
+        -     get_Bpoints(p1::DSProblem,p2::DSProblem,flag::Int)
+        - 
+        - Get the points to determine the reference point and Pareto front
+        - flag for identifying optimize p1 or p2
+        - """
+       32 function get_Bpoints(p1::DSProblem, p2::DSProblem, flag::Int)
+       32     temp_Bpoints = Vector{B_points}()
+       32     Setup(p1)
+        -     # push B_point for initial point
+       32     flag == 1 &&
+        -         push!(temp_Bpoints, B_points([p1.objective(p1.x), p2.objective(p1.x)],p1.x))
+        - 
+      756     while _check_stoppingconditions(p1)
+      724         p1.full_output && OutputIterationDetails(p1)
+      724         if OptimizeLoop(p1) == Dominating
+      100             flag == 1 &&
+        -                 push!(temp_Bpoints, B_points([p1.x_cost, p2.objective(p1.x)],p1.x))
+      100             flag == 2 &&
+        -                 push!(temp_Bpoints, B_points([p2.objective(p1.x), p1.x_cost],p1.x))
+        -         end
+        -     end
+        - 
+       32     Finish(p1)
+        - 
+       32     if p1.status.optimization_status != MeshPrecisionLimit && p1.status.optimization_status != PollPrecisionLimit
+        8         error("The $(p1.status.optimization_status_string) is not enough for BiMADS, please increase it")
+        -     end
+       24     return temp_Bpoints
+        - end
+        - 
+        - """
+        -     pareto_front(points::Vector{B_points}, minimize = true)
+        - 
+        - find the Pareto points, only for this BiMADS.jl, not general methods
+        - """
+       52 function pareto_front(points::Vector{B_points}, minimize = true)
+      104     cmp_strict = minimize ? (<) : (>)
+       52     cmp = minimize ? (<=) : (>=)
+       52     dims = 2 #number of objective functions, needs modification for multi-MADS
+  1850972     strictly_dominates(u::B_points, v::B_points) =
+        -         all(cmp(u.cost[i], v.cost[i]) for i = 1:dims) &&
+        -         any(cmp_strict(u.cost[i], v.cost[i]) for i = 1:dims)
+     7836     undominated(p::B_points) =
+        -         !any(
+        -             strictly_dominates(p2::B_points, p::B_points) for
+        -             p2 ∈ points if p2.cost != p.cost
+        -         )
+       52     filter!(undominated, points)
+    58548     sort!(points, by = v -> v.cost, rev = false)
+       52     return points
+        - end
+        - 
+        - """
+        -     initial_X_L(p1, p2)::Vector{Float64}
+        - 
+        - get the initial undominated points from p1 and p2
+        - """
+        8 function initial_X_L(p1, p2)::Vector{B_points}
+        8     x_L = Vector{B_points}()
+        -     # optmization for p1
+        8     append!(x_L, get_Bpoints(p1, p2, 1))
+        8     x_L = reverse(x_L)
+        -     # optmization for p2
+        8     append!(x_L, get_Bpoints(p2, p1, 2))
+        8     return x_L
+        - end
+        - 
+        - """
+        -     get_ref(points::Vector{B_points})::Int
+        - 
+        - get the reference point for L>2
+        - """
+       44 function get_ref(points::Vector{B_points})::Int
+     6316     dis(x::Int) = LinearAlgebra.norm(points[x].cost - points[x-1].cost)^2+LinearAlgebra.norm(points[x].cost - points[x+1].cost)^2
+       44     max_index = 2 #point with largest distance to its adjacent points
+       44     max_distance=0.
+        - 
+       88     for i = 2:length(points)-1
+     6156         if dis(i)/(points[i].weight+1) >= max_distance
+      116             max_distance = dis(i)/(points[i].weight+1)
+     6228             max_index = i
+        -         end
+        -     end
+       44     return max_index
+        - end
+        - 
+        - 
+        - """
+        -     ReferencePointDetermination(undominated_points::Vector{B_points})::Tuple{Int,Float64,Vector{Float64}}
+        - 
+        - get the reference point for any case
+        - """
+       44 function ReferencePointDetermination(undominated_points::Vector{B_points})::Tuple{Int,Float64,Vector{Float64}}
+       44     L=length(undominated_points)
+       44     if L==1
+        0         j=1
+        0         ref_point=undominated_points[1].cost
+        0         δ= 1.
+       44     elseif L==2
+        0         j=1 #different definition in paper(j=2) and books(j=1)
+        0         ref_point=[undominated_points[2].cost[1],undominated_points[1].cost[2]]
+        0         δ=(LinearAlgebra.norm(undominated_points[1].cost - undominated_points[2].cost)^2)/(undominated_points[2].weight+1)
+        -     else
+       44         j = get_ref(undominated_points)
+       88         ref_point=[undominated_points[j+1].cost[1],undominated_points[j-1].cost[2]]
+       44         δ=(LinearAlgebra.norm(undominated_points[j].cost - undominated_points[j-1].cost)^2
+        -         +LinearAlgebra.norm(undominated_points[j].cost - undominated_points[j+1].cost)^2)/(undominated_points[j].weight+1)
+        -     end
+       44     undominated_points[j].weight+=1
+        -     # get_adj_dis(undominated_points)
+       44     return j, δ, ref_point
+        - end
+        - 
+        - """
+        -     function phi(f1::Function,f2::Function, r::Vector{Float64}, x::Vector{Float64})
+        - 
+        - Auxiliary Function from BiMADS. Aim to refomulate the Bi-obj problem into
+        - single-obj problem. Return the cost of the refomulated objective function
+        - 
+        - x is the point to be evaluated, r is the reference point
+        - """
+    13796 function phi(f1::Function,f2::Function, r::Vector{Float64}, x::Vector{Float64})
+    13796     if (f1(x) <= r[1]) && (f2(x) <= r[2]) #if x dominant r
+    13448         return -(r[1] - f1(x))^2 * (r[2] - f2(x))^2
+        -     else
+      348         return (max(f1(x) - r[1], 0))^2 + (max(f2(x) - r[2], 0))^2
+        -     end
+        - end
+        - 
+        - """
+        -     update_p(p::DSProblem)
+        - reset the reformulated problem for new MADS iteration
+        - Including reset the Mesh/Poll size, IterationLimit, FunctionEvaluationLimit, RuntimeLimit, etc.
+        - 
+        - """
+       36 function update_p_loop(p_init::DSProblem,p_reform::DSProblem,status::BiMADS_status)
+        - 
+       36     status.iteration+=p_reform.status.iteration
+       36     status.func_evaluation+=p_reform.status.function_evaluations
+       36     status.total_time=p_reform.status.runtime_total
+       36     p_reform=deepcopy(p_init)
+        - 
+       36     for c in p.stoppingconditions
+      144         i=_get_conditionindexes(p,typeof(c))[1]
+      144         if c isa IterationStoppingCondition
+       36             p_reform.stoppingconditions[i].limit=p_init.stoppingconditions[i].limit-status.iteration
+      108         elseif c isa FunctionEvaluationStoppingCondition
+      180             p_reform.stoppingconditions[i].limit=p_init.stoppingconditions[i].limit-status.func_evaluation
+        -         # elseif c isa RuntimeStoppingCondition
+        -         #     p_reform.stoppingconditions[i].limit =p_init.stoppingconditions[i].limit-status.total_time
+        -         end
+        -     end
+       36     return p_reform
+        - end
+        - 
+        8 function update_p_init(p,p1::DSProblem,p2::DSProblem,status::BiMADS_status)
+        8     for c in p.stoppingconditions
+       32         i=_get_conditionindexes(p,typeof(c))[1]
+       32         if c isa IterationStoppingCondition
+        8             status.iteration=p1.status.iteration+p2.status.iteration
+        8             p.stoppingconditions[i].limit-=status.iteration
+        8             p.stoppingconditions[i].limit<1 && error("The Iteration limit is not enough for BiMADS, please increase it")
+       24         elseif c isa FunctionEvaluationStoppingCondition
+        8             status.func_evaluation=p1.status.function_evaluations+p2.status.function_evaluations
+        8             p.stoppingconditions[i].limit-=status.func_evaluation
+        8             p.stoppingconditions[i].limit<1 && error("The Function evaluation limit is not enough for BiMADS, please increase it")
+       16         elseif c isa RuntimeStoppingCondition
+        0             status.total_time=p1.status.runtime_total+p2.status.runtime_total
+        0             p.stoppingconditions[i].limit -=status.total_time
+       32             p.stoppingconditions[i].limit<=0 && error("The Runtime limit is not enough for BiMADS, please increase it")
+        -         end
+        -     end
+        - end
+        - 
+        8 function update_p_end(p_reform::DSProblem,status::BiMADS_status)
+        8     for c in p.stoppingconditions
+       32         i=_get_conditionindexes(p,typeof(c))[1]
+       32         if c isa IterationStoppingCondition
+        8             status.iteration+=p_reform.status.iteration
+       24         elseif c isa FunctionEvaluationStoppingCondition
+       40             status.func_evaluation+=p_reform.status.function_evaluations
+        -         # elseif c isa RuntimeStoppingCondition
+        -         #     status.total_time+=p_reform.status.runtime_total
+        -         end
+        -     end
+        - end
+        - 
+       44 function checkBiMADSStopping(p::DSProblem,status::BiMADS_status,undominated_points::Vector{B_points})::Bool
+       44     if p.status.optimization_status!=PollPrecisionLimit &&p.status.optimization_status!=MeshPrecisionLimit
+        8         status.opt_status=p.status.optimization_status
+        8         return false
+        -     end
+        - 
+       36     for c in p.stoppingconditions
+      144         if c isa RuntimeStoppingCondition
+        0             status.opt_status=RuntimeLimit
+        0             i=_get_conditionindexes(p,RuntimeStoppingCondition)[1]
+        0             (time()-status.start_time)>=p.stoppingconditions[i].limit && return false
+        -         end
+      144         if c isa HypervolumeStoppingCondition
+        0             status.opt_status=HypervolumeLimit
+        0             i=_get_conditionindexes(p,HypervolumeStoppingCondition)[1]
+        0             status.hypervolume=hvIndicator(undominated_points)
+       36             status.hypervolume>=p.stoppingconditions[i].limit && return false
+        -         end
+        -     end
+        - 
+       36     bb = bytesavailable(stdin)
+       36     if bb>0
+        0         println("quit")
+        0         status.opt_status=KeyInterrupt
+        0         return false
+        -     end
+        - 
+       36     return true
+        - end
+        - 
+        - """
+        -     Optimize_Bi!(p::DSProblem)
+        - 
+        - Run the BiMADS algorithm on problem `p`.
+        - 
+        - `p` must have had its initial point and objective function set. If extreme
+        - barrier constraints have been set then the initial point must be value for
+        - those constraints.
+        - """
+        8 function Optimize_Bi!(p::DSProblem)
+        8     println("BiMADS")
+        8     status=BiMADS_status()
+        8     p1::DSProblem, p2::DSProblem = p_split(p)
+        8     f1 = p1.objective
+        8     f2 = p2.objective
+        -     # Initialization
+        8     undominated_points = pareto_front(initial_X_L(p1, p2))
+        - # display(undominated_points)
+        - # display(plot_Bpoint(undominated_points))
+        - 
+        8     p_reform=deepcopy(p)
+        8     update_p_init(p_reform,p1,p2,status)
+        - 
+        8     iteration_count=0
+        8     ref_point=Vector{Float64}()
+        8     j = 0     #initial point for the refomulated sigle-obj problem
+        8     δ = 0.0 # quantify the quality of the coverage of the undominated points
+        -             # here is the coverage of the point with largest distance to its adjacent points
+        - # fig1=plot_Bpoint(undominated_points)
+        - # fig2=plot_Bpoint(undominated_points)
+        -     # Main iteration
+       44     while true
+       44         count=0
+       44         println("===============================")
+       44         println("Start of iteration ",iteration_count)
+        -         #Reference point determination
+       44         j, δ, ref_point=ReferencePointDetermination(undominated_points)
+       44         println("j=",j,"  ref=",ref_point)
+        -         #Single-objective formulation minimization
+    13840         f_reform(x)=phi(f1,f2, ref_point, x)
+       44         SetObjective(p_reform, f_reform)
+       44         SetInitialPoint(p_reform,undominated_points[j].x_now)
+        - 
+        - # fig1=plot_Bpoint(undominated_points)
+        - # p_reform.full_output=true
+        -         #run MADS for refomulated problem and add new undominated points
+       44         Setup(p_reform)
+     3956         while _check_stoppingconditions(p_reform)
+     3912             p_reform.full_output && OutputIterationDetails(p_reform)
+     3912             if OptimizeLoop(p_reform) == Dominating
+     1464                     push!(undominated_points, B_points([p1.objective(p_reform.x), p2.objective(p_reform.x)],p_reform.x))
+     1464                     count+=1
+        - # plot!(fig2,[p1.objective(p_reform.x)],[p2.objective(p_reform.x)],seriestype = :scatter,color=logocolors.blue)
+        -             end
+        -         end
+       44         p_reform.status.runtime_total = time() - status.start_time
+        - # fig2=plot_Bpoint(undominated_points)
+        - 
+       44         println("Add new points:",count)
+        - # display(fig2)
+        - 
+        -         #update X_L
+       44         pareto_front(undominated_points)
+        - 
+       44         iteration_count+=1
+        - 
+       44         !checkBiMADSStopping(p_reform,status,undominated_points) && break
+       36         p_reform=update_p_loop(p,p_reform,status)
+        - # length(undominated_points)>=474 && break
+        -         # n_iteration>=p.stoppingconditions[1].limit ? (n_iteration+=1) : (n_iteration+=1)
+        -         # display(undominated_points)
+        -         # fig3=plot_Bpoint(undominated_points)
+        -         # figall=plot(fig2,fig3,aspect_ratio=1)
+        -         # savefig(figall, "/Users/zyy/Desktop/XJTLU/MSc_Project/Julia/test_julia/Results/DS_result_$(iteration_count-1).pdf");
+        - # sleep(2)
+        - # check()==1 && break
+        - # if !isempty(input)
+        - #     println("dd")
+        - #     display(input)
+        - #     break
+        - # end
+        -     end
+        - 
+        8     println("===============================")
+        8     println("Total undominated points:", length(undominated_points))
+        8     update_p_end(p_reform,status)
+        8     println("Total Iterations: ",status.iteration)
+        8     println("Total Function Evaluations: ",status.func_evaluation)
+        8     println("Total Run Time: ",time()-p1.status.start_time)
+        8     println("Optimization Status: ",status.opt_status)
+        8     println("===============================")
+        8     return undominated_points
+        - end
+        - 
+        - # @time result=Optimize!(p)
+        - # # display(result)
+        - # display(paretoCoverage(result))
+        - # display(hvIndicator(result))
+        - # fig=scatter()
+        - # for i in 1:length(result)
+        - #     fig=scatter!([result[i].cost[1]],[result[i].cost[2]],color=logocolors.red,legend = false)
+        - # end
+        - # # display(fig)
+        - # savefig(fig, "/Users/zyy/Desktop/XJTLU/MSc_Project/Julia/test_julia/Results/DS_result_$(p.stoppingconditions[1].limit).pdf");
+        - 
+        - 
+        - 
+        - 
+        - 
+        - """
+        -     p_dim(obj::Function,p.N)::Int
+        - 
+        - The dimension of the given objective function
+        - """
+       12 p_dim(p::DSProblem) = p_dim(p.objective, p.N)
+       12 function p_dim(objective::Function, N::Int)::Int
+       12     return length(objective(ones(N)))
+        - end

@@ -483,10 +483,10 @@ function Optimize_Bi!(p::DSProblem)
     return undominated_points
 end
 
-@time result=Optimize!(p)
-# display(result)
-display(paretoCoverage(result))
-display(hvIndicator(result))
+# @time result=Optimize!(p)
+# # display(result)
+# display(paretoCoverage(result))
+# display(hvIndicator(result))
 # fig=scatter()
 # for i in 1:length(result)
 #     fig=scatter!([result[i].cost[1]],[result[i].cost[2]],color=logocolors.red,legend = false)

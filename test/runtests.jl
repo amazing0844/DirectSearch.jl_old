@@ -1,5 +1,7 @@
 using DirectSearch
 using Test
+using REPL
+
 
 include("./test_OrthoMADS.jl")
 include("./test_LTMADS.jl")

@@ -1,6 +1,6 @@
 export AddStoppingCondition, SetIterationLimit, BumpIterationLimit, SetFunctionEvaluationLimit,
        BumpFunctionEvaluationLimit, SetMinimumMeshSize, SetMinimumPollSize, RuntimeStoppingCondition,
-       SetButtonLimit
+       SetButtonLimit,SetHypervolumeLimit
 
 """
     AddStoppingCondition(p::DSProblem, c::T) where T <: AbstractStoppingCondition
@@ -297,12 +297,6 @@ mutable struct HypervolumeStoppingCondition <: AbstractStoppingCondition
 end
 
 StoppingConditionStatus(::HypervolumeStoppingCondition) = "Hyper-Volume limit"
-
-# function init_stoppingcondition(::DSProblem, s::HypervolumeStoppingCondition)
-#     if s.limit <= 0
-#         error("Hyper-Volume limit must be positive.")
-#     end
-# end
 CheckStoppingCondition(p::DSProblem, s::HypervolumeStoppingCondition) = true
 
 """

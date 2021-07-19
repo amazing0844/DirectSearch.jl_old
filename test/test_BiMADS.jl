@@ -21,14 +21,21 @@
         @test s.iteration==0
         @test s.func_evaluation==0
         @test s.total_time==0.0
-        @test s.pareto_coverage==0.0
+        @test s.hypervolume==0.0
         @test s.opt_status==DS.Unoptimized
         @test s.opt_string=="Unoptimized"
         @test typeof(s.start_time)==Float64
     end
 
     @testset "Pareto_Evaluation" begin
-
+        p = DSProblem(2; objective = test);
+        result=Optimize!(p)
+        hv1=hvIndicator(result)
+        p = DSProblem(2; objective = test);
+        SetIterationLimit(p,100)
+        result=Optimize!(p)
+        hv2=hvIndicator(result)
+        @test hv1>=hv2
     end
 
     @testset "Initialization" begin
