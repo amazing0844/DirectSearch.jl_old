@@ -281,7 +281,6 @@ function ReferencePointDetermination(undominated_points::Vector{B_points})::Tupl
         +LinearAlgebra.norm(undominated_points[j].cost - undominated_points[j+1].cost)^2)/(undominated_points[j].weight+1)
     end
     undominated_points[j].weight+=1
-    # get_adj_dis(undominated_points)
     return j, δ, ref_point
 end
 
@@ -296,6 +295,8 @@ x is the point to be evaluated, r is the reference point
 function phi(f1::Function,f2::Function, r::Vector{Float64}, x::Vector{Float64})
     if (f1(x) <= r[1]) && (f2(x) <= r[2]) #if x dominant r
         return -(r[1] - f1(x))^2 * (r[2] - f2(x))^2
+    elseif (f1(x) == r[1]) || (f2(x) == r[2])
+        return 0
     else
         return (max(f1(x) - r[1], 0))^2 + (max(f2(x) - r[2], 0))^2
     end
@@ -320,8 +321,6 @@ function update_p_loop(p_init::DSProblem,p_reform::DSProblem,status::BiMADS_stat
             p_reform.stoppingconditions[i].limit=p_init.stoppingconditions[i].limit-status.iteration
         elseif c isa FunctionEvaluationStoppingCondition
             p_reform.stoppingconditions[i].limit=p_init.stoppingconditions[i].limit-status.func_evaluation
-        # elseif c isa RuntimeStoppingCondition
-        #     p_reform.stoppingconditions[i].limit =p_init.stoppingconditions[i].limit-status.total_time
         end
     end
     return p_reform
@@ -333,11 +332,11 @@ function update_p_init(p,p1::DSProblem,p2::DSProblem,status::BiMADS_status)
         if c isa IterationStoppingCondition
             status.iteration=p1.status.iteration+p2.status.iteration
             p.stoppingconditions[i].limit-=status.iteration
-            p.stoppingconditions[i].limit<1 && error("The Iteration limit is not enough for BiMADS, please increase it")
+            p.stoppingconditions[i].limit<=1 && error("The Iteration limit is not enough for BiMADS, please increase it")
         elseif c isa FunctionEvaluationStoppingCondition
             status.func_evaluation=p1.status.function_evaluations+p2.status.function_evaluations
             p.stoppingconditions[i].limit-=status.func_evaluation
-            p.stoppingconditions[i].limit<1 && error("The Function evaluation limit is not enough for BiMADS, please increase it")
+            p.stoppingconditions[i].limit<=1 && error("The Function evaluation limit is not enough for BiMADS, please increase it")
         elseif c isa RuntimeStoppingCondition
             status.total_time=p1.status.runtime_total+p2.status.runtime_total
             p.stoppingconditions[i].limit -=status.total_time
@@ -353,8 +352,6 @@ function update_p_end(p_reform::DSProblem,status::BiMADS_status)
             status.iteration+=p_reform.status.iteration
         elseif c isa FunctionEvaluationStoppingCondition
             status.func_evaluation+=p_reform.status.function_evaluations
-        # elseif c isa RuntimeStoppingCondition
-        #     status.total_time+=p_reform.status.runtime_total
         end
     end
 end
@@ -491,7 +488,7 @@ end
 # for i in 1:length(result)
 #     fig=scatter!([result[i].cost[1]],[result[i].cost[2]],color=logocolors.red,legend = false)
 # end
-# # display(fig)
+# display(fig)
 # savefig(fig, "/Users/zyy/Desktop/XJTLU/MSc_Project/Julia/test_julia/Results/DS_result_$(p.stoppingconditions[1].limit).pdf");
 
 

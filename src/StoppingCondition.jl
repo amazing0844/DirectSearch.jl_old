@@ -1,6 +1,6 @@
 export AddStoppingCondition, SetIterationLimit, BumpIterationLimit, SetFunctionEvaluationLimit,
        BumpFunctionEvaluationLimit, SetMinimumMeshSize, SetMinimumPollSize, RuntimeStoppingCondition,
-       SetButtonLimit,SetHypervolumeLimit
+       SetButtonLimit,SetHypervolumeLimit,HypervolumeStoppingCondition
 
 """
     AddStoppingCondition(p::DSProblem, c::T) where T <: AbstractStoppingCondition

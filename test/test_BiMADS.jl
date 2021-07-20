@@ -5,8 +5,6 @@
         return f1,f2
     end
 
-
-
     @testset "B_points" begin
         cost=[1.,2.]
         coordinates=[3.,4.]
@@ -35,6 +33,7 @@
         SetIterationLimit(p,100)
         result=Optimize!(p)
         hv2=hvIndicator(result)
+        @test typeof(DS.pareto_front(result))==Vector{DS.B_points}
         @test hv1>=hv2
     end
 
@@ -59,8 +58,71 @@
             @test length(DS.get_Bpoints(p1,p2,1))>0
             @test length(DS.get_Bpoints(p2,p1,2))>0
         end
+        p1, p2=DS.p_split(DSProblem(2; objective = test))
+        @test typeof(DS.initial_X_L(p1, p2))==Vector{DS.B_points}
+    end
+    @testset "Main Iteration" begin
+        @testset "Reference Point Determination" begin
+            undominated_points=Vector{DS.B_points}()
+            # one undominated point
+            push!(undominated_points,DS.B_points([0.1,0.2],[0.3,0.4]))
+            j, δ, ref_point=DS.ReferencePointDetermination(undominated_points)
+            @test j==1. && δ==1. && ref_point==[0.1,0.2]
+            # two undominated point
+            push!(undominated_points,DS.B_points([0.5,0.6],[0.7,0.8]))
+            j, δ, ref_point=DS.ReferencePointDetermination(undominated_points)
+            @test j==1. && isapprox(0.32, δ,atol=0.1) && ref_point==[0.5,0.2]
+        end
 
-        # @test_throws ErrorException DS.get_Bpoints(p1,p2,1)
+        @testset "Auxiliary function phi" begin
+            p1, p2=DS.p_split(DSProblem(2; objective = test))
+            f1 = p1.objective
+            f2 = p2.objective
+            @test DS.phi(f1,f2,[16.,61.],[-6.,1.])==-1.
+            @test DS.phi(f1,f2,[15.,61.],[-6.,1.])==DS.phi(f1,f2,[16.,60.],[-6.,1.])==0.
+            @test DS.phi(f1,f2,[14.,61.],[-6.,1.])==1.
+        end
+
+        @testset "Stopping Conditions" begin
+            @testset "Iteration Limit" begin
+                p=DSProblem(2; objective = test)
+                SetIterationLimit(p,62)
+                @test_throws ErrorException Optimize!(p)
+                status=DS.BiMADS_status()
+                p.status.optimization_status=DS.IterationLimit
+                undominated_points=Vector{DS.B_points}()
+                @test DS.checkBiMADSStopping(p,status,undominated_points)==false
+            end
+            @testset "Function Evalution Limit" begin
+                p=DSProblem(2; objective = test)
+                SetFunctionEvaluationLimit(p,234)
+                @test_throws ErrorException Optimize!(p)
+                status=DS.BiMADS_status()
+                p.status.optimization_status=DS.FunctionEvaluationLimit
+                undominated_points=Vector{DS.B_points}()
+                @test DS.checkBiMADSStopping(p,status,undominated_points)==false
+            end
+            @testset "Run time Limit" begin
+                p=DSProblem(2; objective = test)
+                AddStoppingCondition(p, RuntimeStoppingCondition(0.001))
+                @test_throws ErrorException Optimize!(p)
+                status=DS.BiMADS_status()
+                p.status.optimization_status=DS.RuntimeLimit
+                undominated_points=Vector{DS.B_points}()
+                @test DS.checkBiMADSStopping(p,status,undominated_points)==false
+            end
+
+            @testset "Hyper-Volume Limit" begin
+                p=DSProblem(2; objective = test)
+                AddStoppingCondition(p, HypervolumeStoppingCondition(1.0))
+                @test typeof(Optimize!(p))==Vector{DS.B_points}
+                status=DS.BiMADS_status()
+                p.status.optimization_status=DS.HypervolumeLimit
+                undominated_points=Vector{DS.B_points}()
+                @test DS.checkBiMADSStopping(p,status,undominated_points)==false
+            end
+
+        end
     end
 
 end
