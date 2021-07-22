@@ -1,6 +1,6 @@
 using Plots
 using Statistics
-export p_dim,  hvIndicator
+export p_dim,  hvIndicator,p_MADS
 #TODO BiMADS
 logocolors = Colors.JULIA_LOGO_COLORS
 """
@@ -81,14 +81,15 @@ function test1(x)
     f1(x) = ((x[1] + 2) .^ 2  - 10.0)
     # f2(x) = f(x)
     f2(x) = ((x[1] -2) .^ 2 +20)
-    return f1, f2
+    return [f1,f2]
 end
+
 
 function test2(x)
     f1(x) = (x[1] + 1) .^ 2 +(x[2] - 1) .^2 -10
     # f2(x) = (x[1] + 12) .^ 2 +(x[2] - 3) .^2 + 20.
     f2(x) = f(x)
-    return f1*10,f2*10
+    return f1,f2
 end
 
 function ex005(x)
@@ -96,7 +97,7 @@ function ex005(x)
 end
 
 # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=50, full_output = false);
-p = DSProblem(1; objective = test1, initial_point = [0.],iteration_limit=500, full_output = false);
+p = DSProblem(2; objective = test1, initial_point = [0.,0.],iteration_limit=500, full_output = false);
 # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=1000, full_output = false);
 # SetIterationLimit(p,2)
 
@@ -144,6 +145,7 @@ function hvIndicator(paretoSet::Vector{B_points},factor=1.1)::Float64
     for i=1:length(paretoSet)-1
         push!(points,paretoSet[i].cost)
     end
+    length(points)<2 && return 0.
      ref=factor.*[last(points)[1],first(points)[2]]
      normalize_factor=(ref[1]-first(points)[1]).*(ref[2]-last(points)[2])./2
      hv_volume=0.
@@ -475,13 +477,14 @@ function Optimize_Bi!(p::DSProblem)
     println("Total Iterations: ",status.iteration)
     println("Total Function Evaluations: ",status.func_evaluation)
     println("Total Run Time: ",time()-p1.status.start_time)
+    println("Hyper-Volume: ",hvIndicator(undominated_points))
     println("Optimization Status: ",status.opt_status)
     println("===============================")
     return undominated_points
 end
 
-# @time result=Optimize!(p)
-# # display(result)
+@time result=Optimize!(p)
+# display(result)
 # display(paretoCoverage(result))
 # display(hvIndicator(result))
 # fig=scatter()
@@ -499,8 +502,15 @@ end
     p_dim(obj::Function,p.N)::Int
 
 The dimension of the given objective function
+If the dimension==1, reset the objective function for MADS
 """
-p_dim(p::DSProblem) = p_dim(p.objective, p.N)
-function p_dim(objective::Function, N::Int)::Int
-    return length(objective(ones(N)))
+function p_dim(p::DSProblem)::Int
+    dim=length(p.objective(ones(p.N)))
+    if dim==1
+        x = zeros(Float64, p.N)
+        f= p.objective(x)
+        SetObjective(p, f[1])
+        return dim
+    end
+    return dim
 end

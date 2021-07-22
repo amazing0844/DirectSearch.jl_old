@@ -304,12 +304,16 @@ those constraints.
 """
 
 function Optimize!(p::DSProblem)
-term = REPL.Terminals.TTYTerminal("xterm",stdin,stdout,stderr)
-REPL.Terminals.raw!(term,true)
-Base.start_reading(stdin)
+    # start to monitor the input in REPL (for KeyInterrupt)
+    term = REPL.Terminals.TTYTerminal("xterm",stdin,stdout,stderr)
+    REPL.Terminals.raw!(term,true)
+    Base.start_reading(stdin)
 
     # check the dimension of the problem
-    if p_dim(p)==2
+    p_dimention=p_dim(p)
+    if p_dimention>2
+        error("Sorry, Multi-MADS are not available.")
+    elseif p_dimention==2
         return Optimize_Bi!(p)
     else
     #TODO check that problem definition is complete
