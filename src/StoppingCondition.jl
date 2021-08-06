@@ -1,6 +1,6 @@
 export AddStoppingCondition, SetIterationLimit, BumpIterationLimit, SetFunctionEvaluationLimit,
        BumpFunctionEvaluationLimit, SetMinimumMeshSize, SetMinimumPollSize, RuntimeStoppingCondition,
-       SetButtonLimit,SetHypervolumeLimit,HypervolumeStoppingCondition
+       SetButtonLimit,SetHypervolumeLimit,HypervolumeStoppingCondition, checkKeyInterrupt
 
 """
     AddStoppingCondition(p::DSProblem, c::T) where T <: AbstractStoppingCondition
@@ -20,7 +20,8 @@ function _check_stoppingconditions(p::DSProblem, c::Vector{T}) where T <: Abstra
             setstatus(p, condition)
             return false
         end
-    end
+
+        !checkKeyInterrupt(status) && return false
 
     return true
 end
@@ -59,6 +60,18 @@ _get_conditionindexes(s::Vector{AbstractStoppingCondition}, target::Type) =
 
 
 #===== Built-in stopping conditions =====#
+# Key Interrupt
+function checkKeyInterrupt(status::BiMADS_status)::Bool
+    bb = bytesavailable(stdin)
+    data = read(stdin, bb)
+    if bb>0 && data==UInt8[0x71] #q for quit
+        println("quit")
+        status.opt_status=KeyInterrupt
+        return false
+    end
+    return true
+end
+
 
 #Iteration limit
 mutable struct IterationStoppingCondition <: AbstractStoppingCondition

@@ -1,6 +1,6 @@
 using Plots
 using Statistics
-export p_dim,  hvIndicator,p_MADS
+export p_dim,  hvIndicator,p_MADS, paretoCoverage
 #TODO BiMADS
 logocolors = Colors.JULIA_LOGO_COLORS
 """
@@ -97,7 +97,7 @@ function ex005(x)
 end
 
 # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=50, full_output = false);
-p = DSProblem(2; objective = test1, initial_point = [0.,0.],iteration_limit=500, full_output = false);
+p = DSProblem(2; objective = test1, initial_point = [0.51,0.51],iteration_limit=880, full_output = false);
 # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=1000, full_output = false);
 # SetIterationLimit(p,2)
 
@@ -358,6 +358,8 @@ function update_p_end(p_reform::DSProblem,status::BiMADS_status)
     end
 end
 
+
+
 function checkBiMADSStopping(p::DSProblem,status::BiMADS_status,undominated_points::Vector{B_points})::Bool
     if p.status.optimization_status!=PollPrecisionLimit &&p.status.optimization_status!=MeshPrecisionLimit
         status.opt_status=p.status.optimization_status
@@ -373,17 +375,15 @@ function checkBiMADSStopping(p::DSProblem,status::BiMADS_status,undominated_poin
         if c isa HypervolumeStoppingCondition
             status.opt_status=HypervolumeLimit
             i=_get_conditionindexes(p,HypervolumeStoppingCondition)[1]
+            @show diff=hvIndicator(undominated_points)-status.hypervolume
             status.hypervolume=hvIndicator(undominated_points)
-            status.hypervolume>=p.stoppingconditions[i].limit && return false
+            # status.hypervolume>=p.stoppingconditions[i].limit && return false
+            diff<=p.stoppingconditions[i].limit && return false
         end
     end
 
-    bb = bytesavailable(stdin)
-    if bb>0
-        println("quit")
-        status.opt_status=KeyInterrupt
-        return false
-    end
+    !checkKeyInterrupt(status) && return false
+
 
     return true
 end
@@ -421,11 +421,10 @@ function Optimize_Bi!(p::DSProblem)
     # Main iteration
     while true
         count=0
-        println("===============================")
-        println("Start of iteration ",iteration_count)
+
         #Reference point determination
         j, δ, ref_point=ReferencePointDetermination(undominated_points)
-        println("j=",j,"  ref=",ref_point)
+
         #Single-objective formulation minimization
         f_reform(x)=phi(f1,f2, ref_point, x)
         SetObjective(p_reform, f_reform)
@@ -446,12 +445,15 @@ function Optimize_Bi!(p::DSProblem)
         p_reform.status.runtime_total = time() - status.start_time
 # fig2=plot_Bpoint(undominated_points)
 
-        println("Add new points:",count)
 # display(fig2)
 
         #update X_L
         pareto_front(undominated_points)
-
+        println("===============================")
+        println("Start of iteration ",iteration_count)
+        println("j=",j,"  ref=",ref_point)
+        println("Add new points:",count)
+        println("Hyper-Volume:",hvIndicator(undominated_points))
         iteration_count+=1
 
         !checkBiMADSStopping(p_reform,status,undominated_points) && break
@@ -483,7 +485,7 @@ function Optimize_Bi!(p::DSProblem)
     return undominated_points
 end
 
-@time result=Optimize!(p)
+# @time result=Optimize!(p)
 # display(result)
 # display(paretoCoverage(result))
 # display(hvIndicator(result))

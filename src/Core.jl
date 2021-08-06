@@ -282,17 +282,6 @@ function SetVariableBounds(p::DSProblem{T}, l::Vector{T}, u::Vector{T}) where T
     end
 end
 
-# function check()
-#         bb = bytesavailable(stdin)
-#         if bb>0
-#             println("quit")
-#             return true
-#         end
-#         return false
-# end
-
-
-
 """
     Optimize!(p::DSProblem)
 
