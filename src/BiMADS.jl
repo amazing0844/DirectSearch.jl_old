@@ -1,6 +1,6 @@
 using Plots
 using Statistics
-export p_dim,  hvIndicator,p_MADS, paretoCoverage
+export p_dim, hvIndicator,p_MADS, BiMADS_status, paretoCoverage
 #TODO BiMADS
 logocolors = Colors.JULIA_LOGO_COLORS
 """
@@ -198,8 +198,8 @@ function get_Bpoints(p1::DSProblem, p2::DSProblem, flag::Int)
 
     Finish(p1)
 
-    if p1.status.optimization_status != MeshPrecisionLimit && p1.status.optimization_status != PollPrecisionLimit
-        error("The $(p1.status.optimization_status_string) is not enough for BiMADS, please increase it")
+    if p1.status.optimization_status != MeshPrecisionLimit && p1.status.optimization_status != PollPrecisionLimit && p1.status.optimization_status != KeyInterrupt
+        # error("The $(p1.status.optimization_status_string) is not enough for BiMADS, please increase it")
     end
     return temp_Bpoints
 end
@@ -295,12 +295,14 @@ single-obj problem. Return the cost of the refomulated objective function
 x is the point to be evaluated, r is the reference point
 """
 function phi(f1::Function,f2::Function, r::Vector{Float64}, x::Vector{Float64})
-    if (f1(x) <= r[1]) && (f2(x) <= r[2]) #if x dominant r
-        return -(r[1] - f1(x))^2 * (r[2] - f2(x))^2
-    elseif (f1(x) == r[1]) || (f2(x) == r[2])
+    cost1=f1(x)
+    cost2=f2(x)
+    if (cost1 <= r[1]) && (cost2 <= r[2]) #if x dominant r
+        return -(r[1] - cost1)^2 * (r[2] - cost2)^2
+    elseif (cost1 == r[1]) || (cost2 == r[2])
         return 0
     else
-        return (max(f1(x) - r[1], 0))^2 + (max(f2(x) - r[2], 0))^2
+        return (max(cost1 - r[1], 0))^2 + (max(cost2 - r[2], 0))^2
     end
 end
 
@@ -358,10 +360,30 @@ function update_p_end(p_reform::DSProblem,status::BiMADS_status)
     end
 end
 
+"""
+    checkKeyInterrupt(status::BiMADS_status)::Bool
+Check the input from REPL and stop the optimization
 
+"""
+# for BiMADS
+function checkKeyInterrupt(status::BiMADS_status)::Bool
+    bb = bytesavailable(stdin)
+    data = read(stdin, bb)
+    if bb>0 && data==UInt8[0x71] #q for quit
+        println("quit")
+        status.opt_status=KeyInterrupt
+        return false
+    end
+    return true
+end
 
+"""
+    checkBiMADSStopping(p::DSProblem,status::BiMADS_status,undominated_points::Vector{B_points})::Bool
+Check the stopping condition for BiMADS
+
+"""
 function checkBiMADSStopping(p::DSProblem,status::BiMADS_status,undominated_points::Vector{B_points})::Bool
-    if p.status.optimization_status!=PollPrecisionLimit &&p.status.optimization_status!=MeshPrecisionLimit
+    if p.status.optimization_status!=PollPrecisionLimit && p.status.optimization_status!=MeshPrecisionLimit
         status.opt_status=p.status.optimization_status
         return false
     end
@@ -375,7 +397,7 @@ function checkBiMADSStopping(p::DSProblem,status::BiMADS_status,undominated_poin
         if c isa HypervolumeStoppingCondition
             status.opt_status=HypervolumeLimit
             i=_get_conditionindexes(p,HypervolumeStoppingCondition)[1]
-            @show diff=hvIndicator(undominated_points)-status.hypervolume
+            diff=hvIndicator(undominated_points)-status.hypervolume
             status.hypervolume=hvIndicator(undominated_points)
             # status.hypervolume>=p.stoppingconditions[i].limit && return false
             diff<=p.stoppingconditions[i].limit && return false
@@ -383,8 +405,6 @@ function checkBiMADSStopping(p::DSProblem,status::BiMADS_status,undominated_poin
     end
 
     !checkKeyInterrupt(status) && return false
-
-
     return true
 end
 
@@ -403,6 +423,10 @@ function Optimize_Bi!(p::DSProblem)
     p1::DSProblem, p2::DSProblem = p_split(p)
     f1 = p1.objective
     f2 = p2.objective
+
+# SetIterationLimit(p1,10)
+# SetIterationLimit(p2,2)
+
     # Initialization
     undominated_points = pareto_front(initial_X_L(p1, p2))
 # display(undominated_points)
@@ -429,11 +453,12 @@ function Optimize_Bi!(p::DSProblem)
         f_reform(x)=phi(f1,f2, ref_point, x)
         SetObjective(p_reform, f_reform)
         SetInitialPoint(p_reform,undominated_points[j].x_now)
-
+# SetIterationLimit(p_reform,10)
 # fig1=plot_Bpoint(undominated_points)
 # p_reform.full_output=true
         #run MADS for refomulated problem and add new undominated points
         Setup(p_reform)
+
         while _check_stoppingconditions(p_reform)
             p_reform.full_output && OutputIterationDetails(p_reform)
             if OptimizeLoop(p_reform) == Dominating
@@ -455,6 +480,8 @@ function Optimize_Bi!(p::DSProblem)
         println("Add new points:",count)
         println("Hyper-Volume:",hvIndicator(undominated_points))
         iteration_count+=1
+
+# p_reform.status.optimization_status = PollPrecisionLimit
 
         !checkBiMADSStopping(p_reform,status,undominated_points) && break
         p_reform=update_p_loop(p,p_reform,status)

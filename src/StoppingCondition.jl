@@ -20,8 +20,8 @@ function _check_stoppingconditions(p::DSProblem, c::Vector{T}) where T <: Abstra
             setstatus(p, condition)
             return false
         end
-
-        !checkKeyInterrupt(status) && return false
+    end
+        !checkKeyInterrupt(p) && return false
 
     return true
 end
@@ -61,17 +61,19 @@ _get_conditionindexes(s::Vector{AbstractStoppingCondition}, target::Type) =
 
 #===== Built-in stopping conditions =====#
 # Key Interrupt
-function checkKeyInterrupt(status::BiMADS_status)::Bool
+
+# for MADS
+function checkKeyInterrupt(p::DSProblem)::Bool
     bb = bytesavailable(stdin)
     data = read(stdin, bb)
     if bb>0 && data==UInt8[0x71] #q for quit
         println("quit")
-        status.opt_status=KeyInterrupt
+        p.status.optimization_status=KeyInterrupt
+        p.status.optimization_status_string = "Key Interrupt"
         return false
     end
     return true
 end
-
 
 #Iteration limit
 mutable struct IterationStoppingCondition <: AbstractStoppingCondition
