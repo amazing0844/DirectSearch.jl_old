@@ -428,7 +428,6 @@ function Optimize_Bi!(p::DSProblem)
 SetIterationLimit(p1,10)
 SetIterationLimit(p2,10)
 
-
     # Initialization
     undominated_points = pareto_front(initial_X_L(p1, p2))
 # display(undominated_points)
