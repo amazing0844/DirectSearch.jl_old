@@ -397,10 +397,11 @@ function checkBiMADSStopping(p::DSProblem,status::BiMADS_status,undominated_poin
         if c isa HypervolumeStoppingCondition
             status.opt_status=HypervolumeLimit
             i=_get_conditionindexes(p,HypervolumeStoppingCondition)[1]
-            diff=hvIndicator(undominated_points)-status.hypervolume
+            # diff=hvIndicator(undominated_points)-status.hypervolume
+# println("Hyper-Volume: ",hvIndicator(undominated_points))
             status.hypervolume=hvIndicator(undominated_points)
-            # status.hypervolume>=p.stoppingconditions[i].limit && return false
-            diff<=p.stoppingconditions[i].limit && return false
+            status.hypervolume>=p.stoppingconditions[i].limit && return false
+            # diff<=p.stoppingconditions[i].limit && return false
         end
     end
 
@@ -424,14 +425,14 @@ function Optimize_Bi!(p::DSProblem)
     f1 = p1.objective
     f2 = p2.objective
 
-# SetIterationLimit(p1,10)
-# SetIterationLimit(p2,2)
+SetIterationLimit(p1,10)
+SetIterationLimit(p2,10)
 
 
     # Initialization
     undominated_points = pareto_front(initial_X_L(p1, p2))
 # display(undominated_points)
-# display(plot_Bpoint(undominated_points))
+display(plot_Bpoint(undominated_points))
 
     p_reform=deepcopy(p)
     update_p_init(p_reform,p1,p2,status)
@@ -454,7 +455,7 @@ function Optimize_Bi!(p::DSProblem)
         f_reform(x)=phi(f1,f2, ref_point, x)
         SetObjective(p_reform, f_reform)
         SetInitialPoint(p_reform,undominated_points[j].x_now)
-# SetIterationLimit(p_reform,10)
+SetIterationLimit(p_reform,10)
 # fig1=plot_Bpoint(undominated_points)
 # p_reform.full_output=true
         #run MADS for refomulated problem and add new undominated points
@@ -465,6 +466,7 @@ function Optimize_Bi!(p::DSProblem)
             if OptimizeLoop(p_reform) == Dominating
                     push!(undominated_points, B_points([p1.objective(p_reform.x), p2.objective(p_reform.x)],p_reform.x))
                     count+=1
+# count>4000 && break
 # plot!(fig2,[p1.objective(p_reform.x)],[p2.objective(p_reform.x)],seriestype = :scatter,color=logocolors.blue)
             end
         end
@@ -475,15 +477,19 @@ function Optimize_Bi!(p::DSProblem)
 
         #update X_L
         pareto_front(undominated_points)
+        iteration_count+=1
         println("===============================")
         println("Start of iteration ",iteration_count)
         println("j=",j,"  ref=",ref_point)
         println("Add new points:",count)
         println("Hyper-Volume:",hvIndicator(undominated_points))
-        iteration_count+=1
+        println("Total undominated points: ", length(undominated_points))
+        println("Total Run Time: ",time()-p1.status.start_time)
 
 # p_reform.status.optimization_status = PollPrecisionLimit
 
+# println("Hyper-Volume: ",hvIndicator(undominated_points))
+# iteration_count==1 && break
         !checkBiMADSStopping(p_reform,status,undominated_points) && break
         p_reform=update_p_loop(p,p_reform,status)
 # length(undominated_points)>=474 && break
@@ -502,7 +508,7 @@ function Optimize_Bi!(p::DSProblem)
     end
 
     println("===============================")
-    println("Total undominated points:", length(undominated_points))
+    println("Total undominated points: ", length(undominated_points))
     update_p_end(p_reform,status)
     println("Total Iterations: ",status.iteration)
     println("Total Function Evaluations: ",status.func_evaluation)
