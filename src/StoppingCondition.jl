@@ -314,6 +314,12 @@ end
 StoppingConditionStatus(::HypervolumeStoppingCondition) = "Hyper-Volume limit"
 CheckStoppingCondition(p::DSProblem, s::HypervolumeStoppingCondition) = true
 
+function init_stoppingcondition(::DSProblem, s::HypervolumeStoppingCondition)
+    if s.limit <= 0
+        error("Hypervolume limit must be positive.")
+    end
+end
+
 """
     SetHypervolumeLimit(p::DSProblem, i::Float64)
 

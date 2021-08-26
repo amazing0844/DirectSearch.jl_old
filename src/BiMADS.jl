@@ -4,10 +4,10 @@ export p_dim, hvIndicator,p_MADS, BiMADS_status, paretoCoverage
 #TODO BiMADS
 logocolors = Colors.JULIA_LOGO_COLORS
 """
-points for BiMADS Algo on the BiMADS map
+points for BiMADS Algo in objective space
 """
 mutable struct B_points
-    cost::Vector{Float64}  #f1 and f2 value on BiMADS map
+    cost::Vector{Float64}  #f1 and f2 value in objective space
     x_now::Vector{Float64}
     weight::Int            #weight for each undominated point to determine the δ
     function B_points(cost::Vector{Float64},x::Vector{Float64}, w::Int=0)
@@ -23,10 +23,10 @@ Status for BiMADS main iteration, also contain stop conditions
 
 """
 mutable struct BiMADS_status
-    iteration::Int64
-    func_evaluation::Int64
-    total_time::Float64
-    hypervolume::Float64
+    iteration::Int64                #Total iteration spent
+    func_evaluation::Int64          #Total function evaluation spent
+    total_time::Float64             #Totlal running time
+    hypervolume::Float64            #Hypervolume for current Pareto set
     opt_status::OptimizationStatus
     opt_string::String
     start_time::Float64
@@ -96,12 +96,12 @@ function ex005(x)
     return [x[1]^2 - x[2]^2; x[1] / x[2]]
 end
 
-# p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=50, full_output = false);
-p = DSProblem(2; objective = test1, initial_point = [0.51,0.51],iteration_limit=880, full_output = false);
+# p = DSProblem(1);
+# p = DSProblem(2; objective = test1, initial_point = [0.51,0.51],iteration_limit=880, full_output = false);
 # p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=1000, full_output = false);
 # SetIterationLimit(p,2)
 
-SetFunctionEvaluationLimit(p,500000)
+# SetFunctionEvaluationLimit(p,500000)
 # AddStoppingCondition(p, RuntimeStoppingCondition(1.5))
 # AddStoppingCondition(p, HypervolumeStoppingCondition(1.2))
 # cons1(x) = x[1] > -1.
@@ -147,7 +147,8 @@ function hvIndicator(paretoSet::Vector{B_points},factor=1.1)::Float64
     end
     length(points)<2 && return 0.
      ref=factor.*[last(points)[1],first(points)[2]]
-     normalize_factor=(ref[1]-first(points)[1]).*(ref[2]-last(points)[2])./2
+     # normalize_factor=(ref[1]-first(points)[1]).*(ref[2]-last(points)[2])./2
+     normalize_factor=(last(points)[1]-first(points)[1]).*(first(points)[2]-last(points)[2])./2
      hv_volume=0.
      area(x::Vector{Float64},y::Vector{Float64})=(abs(x[1]-y[1])).*(abs(x[2]-y[2]))
      for p in points
@@ -199,7 +200,7 @@ function get_Bpoints(p1::DSProblem, p2::DSProblem, flag::Int)
     Finish(p1)
 
     if p1.status.optimization_status != MeshPrecisionLimit && p1.status.optimization_status != PollPrecisionLimit && p1.status.optimization_status != KeyInterrupt
-        # error("The $(p1.status.optimization_status_string) is not enough for BiMADS, please increase it")
+        error("The $(p1.status.optimization_status_string) is not enough for BiMADS, please increase it")
     end
     return temp_Bpoints
 end
@@ -312,25 +313,8 @@ reset the reformulated problem for new MADS iteration
 Including reset the Mesh/Poll size, IterationLimit, FunctionEvaluationLimit, RuntimeLimit, etc.
 
 """
-function update_p_loop(p_init::DSProblem,p_reform::DSProblem,status::BiMADS_status)
-
-    status.iteration+=p_reform.status.iteration
-    status.func_evaluation+=p_reform.status.function_evaluations
-    status.total_time=p_reform.status.runtime_total
-    p_reform=deepcopy(p_init)
-
-    for c in p.stoppingconditions
-        i=_get_conditionindexes(p,typeof(c))[1]
-        if c isa IterationStoppingCondition
-            p_reform.stoppingconditions[i].limit=p_init.stoppingconditions[i].limit-status.iteration
-        elseif c isa FunctionEvaluationStoppingCondition
-            p_reform.stoppingconditions[i].limit=p_init.stoppingconditions[i].limit-status.func_evaluation
-        end
-    end
-    return p_reform
-end
-
-function update_p_init(p,p1::DSProblem,p2::DSProblem,status::BiMADS_status)
+# update p before the main iteration
+function update_p(p,p1::DSProblem,p2::DSProblem,status::BiMADS_status)
     for c in p.stoppingconditions
         i=_get_conditionindexes(p,typeof(c))[1]
         if c isa IterationStoppingCondition
@@ -349,16 +333,34 @@ function update_p_init(p,p1::DSProblem,p2::DSProblem,status::BiMADS_status)
     end
 end
 
-function update_p_end(p_reform::DSProblem,status::BiMADS_status)
-    for c in p.stoppingconditions
-        i=_get_conditionindexes(p,typeof(c))[1]
+# update p during the main iteration
+function update_p(p_init::DSProblem,p_reform::DSProblem,status::BiMADS_status)
+    status.iteration+=p_reform.status.iteration
+    status.func_evaluation+=p_reform.status.function_evaluations
+    status.total_time=p_reform.status.runtime_total
+    p_reform=deepcopy(p_init)
+
+    for c in p_reform.stoppingconditions
+        i=_get_conditionindexes(p_reform,typeof(c))[1]
         if c isa IterationStoppingCondition
-            status.iteration+=p_reform.status.iteration
+            p_reform.stoppingconditions[i].limit=p_init.stoppingconditions[i].limit-status.iteration
         elseif c isa FunctionEvaluationStoppingCondition
-            status.func_evaluation+=p_reform.status.function_evaluations
+            p_reform.stoppingconditions[i].limit=p_init.stoppingconditions[i].limit-status.func_evaluation
         end
     end
+    return p_reform
 end
+# update p after the main iteration
+# function update_p(p_reform::DSProblem,status::BiMADS_status)
+#     for c in p.stoppingconditions
+#         i=_get_conditionindexes(p,typeof(c))[1]
+#         if c isa IterationStoppingCondition
+#             status.iteration+=p_reform.status.iteration
+#         elseif c isa FunctionEvaluationStoppingCondition
+#             status.func_evaluation+=p_reform.status.function_evaluations
+#         end
+#     end
+# end
 
 """
     checkKeyInterrupt(status::BiMADS_status)::Bool
@@ -383,8 +385,12 @@ Check the stopping condition for BiMADS
 
 """
 function checkBiMADSStopping(p::DSProblem,status::BiMADS_status,undominated_points::Vector{B_points})::Bool
+    p.status.runtime_total = time() - status.start_time
     if p.status.optimization_status!=PollPrecisionLimit && p.status.optimization_status!=MeshPrecisionLimit
+        # add the numbers from last iteration
         status.opt_status=p.status.optimization_status
+        status.iteration+=p.status.iteration
+        status.func_evaluation+=p.status.function_evaluations
         return false
     end
 
@@ -392,15 +398,15 @@ function checkBiMADSStopping(p::DSProblem,status::BiMADS_status,undominated_poin
         if c isa RuntimeStoppingCondition
             status.opt_status=RuntimeLimit
             i=_get_conditionindexes(p,RuntimeStoppingCondition)[1]
-            (time()-status.start_time)>=p.stoppingconditions[i].limit && return false
+            p.status.runtime_total>p.stoppingconditions[i].limit && return false
         end
         if c isa HypervolumeStoppingCondition
             status.opt_status=HypervolumeLimit
             i=_get_conditionindexes(p,HypervolumeStoppingCondition)[1]
             diff=hvIndicator(undominated_points)-status.hypervolume
             status.hypervolume=hvIndicator(undominated_points)
-            # status.hypervolume>=p.stoppingconditions[i].limit && return false
-            diff<=p.stoppingconditions[i].limit && return false
+            status.hypervolume>=p.stoppingconditions[i].limit && return false
+            # diff<=p.stoppingconditions[i].limit && return false #if the change of HV smaller than threshold
         end
     end
 
@@ -434,7 +440,7 @@ function Optimize_Bi!(p::DSProblem)
 # display(plot_Bpoint(undominated_points))
 
     p_reform=deepcopy(p)
-    update_p_init(p_reform,p1,p2,status)
+    update_p(p_reform,p1,p2,status)
 
     iteration_count=0
     ref_point=Vector{Float64}()
@@ -446,7 +452,10 @@ function Optimize_Bi!(p::DSProblem)
     # Main iteration
     while true
         count=0
-
+# count2=0
+eva=50
+tti=10000
+# length(undominated_points)>200 && break
         #Reference point determination
         j, δ, ref_point=ReferencePointDetermination(undominated_points)
 
@@ -465,10 +474,17 @@ function Optimize_Bi!(p::DSProblem)
             if OptimizeLoop(p_reform) == Dominating
                     push!(undominated_points, B_points([p1.objective(p_reform.x), p2.objective(p_reform.x)],p_reform.x))
                     count+=1
+# count2+=1
+
+
+
+# p_reform.status.function_evaluations>eva && break
+# p_reform.status.optimization_status=PollPrecisionLimit
+# count>3000 && break
 # plot!(fig2,[p1.objective(p_reform.x)],[p2.objective(p_reform.x)],seriestype = :scatter,color=logocolors.blue)
             end
         end
-        p_reform.status.runtime_total = time() - status.start_time
+        # p_reform.status.runtime_total = time() - status.start_time
 # fig2=plot_Bpoint(undominated_points)
 
 # display(fig2)
@@ -480,12 +496,14 @@ function Optimize_Bi!(p::DSProblem)
         println("j=",j,"  ref=",ref_point)
         println("Add new points:",count)
         println("Hyper-Volume:",hvIndicator(undominated_points))
+        println("Total undominated points: ", length(undominated_points))
+        # println("===============================")
         iteration_count+=1
-
-# p_reform.status.optimization_status = PollPrecisionLimit
-
+# iteration_count>tti && break
+# @show p_reform.status.optimization_status
+# p_reform=update_p(p,p_reform,status)
         !checkBiMADSStopping(p_reform,status,undominated_points) && break
-        p_reform=update_p_loop(p,p_reform,status)
+        p_reform=update_p(p,p_reform,status)
 # length(undominated_points)>=474 && break
         # n_iteration>=p.stoppingconditions[1].limit ? (n_iteration+=1) : (n_iteration+=1)
         # display(undominated_points)
@@ -500,16 +518,16 @@ function Optimize_Bi!(p::DSProblem)
 #     break
 # end
     end
-
+    # update_p(p_reform,status)
     println("===============================")
     println("Total undominated points:", length(undominated_points))
-    update_p_end(p_reform,status)
     println("Total Iterations: ",status.iteration)
     println("Total Function Evaluations: ",status.func_evaluation)
-    println("Total Run Time: ",time()-p1.status.start_time)
+    println("Total Run Time: ",p_reform.status.runtime_total)
     println("Hyper-Volume: ",hvIndicator(undominated_points))
     println("Optimization Status: ",status.opt_status)
     println("===============================")
+    # @show paretoCoverage(undominated_points)
     return undominated_points
 end
 
