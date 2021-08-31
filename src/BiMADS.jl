@@ -1,6 +1,6 @@
 using Plots
 using Statistics
-export p_dim, hvIndicator,p_MADS, BiMADS_status, paretoCoverage
+export p_dim, hvIndicator,p_MADS, BiMADS_status, paretoCoverage,plot_Bpoint
 #TODO BiMADS
 logocolors = Colors.JULIA_LOGO_COLORS
 """
@@ -109,11 +109,17 @@ end
 # cons2(x) = x[1] <1.
 # AddExtremeConstraint(p, cons2)
 
+"""
+    plot_Bpoint(points::Vector{B_points})
+
+Plot the Pareto front
+"""
 function plot_Bpoint(points::Vector{B_points})
     fig = Plots.scatter()
     for i = 1:length(points)
         fig = plot!([points[i].cost[1]],[points[i].cost[2]],seriestype = :scatter,aspect_ratio=1,legend = false,color=logocolors.red,show = true)
     end
+    plot!(fig,xlabel="f1 cost",ylabel="f2 cost")
 return fig
 end
 
@@ -453,7 +459,7 @@ function Optimize_Bi!(p::DSProblem)
     while true
         count=0
 # count2=0
-eva=50
+eva=500
 tti=10000
 # length(undominated_points)>200 && break
         #Reference point determination
@@ -478,9 +484,9 @@ tti=10000
 
 
 
-# p_reform.status.function_evaluations>eva && break
-# p_reform.status.optimization_status=PollPrecisionLimit
-# count>3000 && break
+p_reform.status.function_evaluations>eva && break
+p_reform.status.optimization_status=PollPrecisionLimit
+count>3000 && break
 # plot!(fig2,[p1.objective(p_reform.x)],[p2.objective(p_reform.x)],seriestype = :scatter,color=logocolors.blue)
             end
         end
