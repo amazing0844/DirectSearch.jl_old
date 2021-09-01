@@ -1,4 +1,3 @@
-using Plots
 using Statistics
 export p_dim, hvIndicator,p_MADS, BiMADS_status, paretoCoverage,plot_Bpoint
 #TODO BiMADS
@@ -42,72 +41,6 @@ mutable struct BiMADS_status
         return s
     end
 end
-
-function DTLZ2n2(x)
-
-    # params
-    M = 2; # Number of objectives
-    n = 2; # Number of variables
-    k = n - M + 1;
-
-    # g(x)
-    gx = sum((x[M:n] .- 0.5).^2);
-
-    # functions
-    ff = ones(M);
-    ff1(x) = (1 + gx ) * prod(cos.(0.5 * pi * x[1:M-1]));
-
-    ff2(x) = (1 + gx) * prod(cos.(0.5 * pi * x[1:M-2])) * sin(0.5 * pi * x[M - 2+ 1]);
-
-
-    return ff1,ff2
-
-end
-
-function s(x)
-    return abs(floor(x + 1 / 2) - x)
-end
-
-function f(x::Vector{Float64})
-    Taka = 0
-    w = 0.9
-    for n = 1:100
-        Taka -= w^n * s(2^n * x[1])
-    end
-    return Taka
-end
-
-function test1(x)
-    f1(x) = ((x[1] + 2) .^ 2  - 10.0)
-    # f2(x) = f(x)
-    f2(x) = ((x[1] -2) .^ 2 +20)
-    return [f1,f2]
-end
-
-
-function test2(x)
-    f1(x) = (x[1] + 1) .^ 2 +(x[2] - 1) .^2 -10
-    # f2(x) = (x[1] + 12) .^ 2 +(x[2] - 3) .^2 + 20.
-    f2(x) = f(x)
-    return f1,f2
-end
-
-function ex005(x)
-    return [x[1]^2 - x[2]^2; x[1] / x[2]]
-end
-
-# p = DSProblem(1);
-# p = DSProblem(2; objective = test1, initial_point = [0.51,0.51],iteration_limit=880, full_output = false);
-# p = DSProblem(2; objective = DTLZ2n2, initial_point = [0.,0.],iteration_limit=1000, full_output = false);
-# SetIterationLimit(p,2)
-
-# SetFunctionEvaluationLimit(p,500000)
-# AddStoppingCondition(p, RuntimeStoppingCondition(1.5))
-# AddStoppingCondition(p, HypervolumeStoppingCondition(1.2))
-# cons1(x) = x[1] > -1.
-# AddExtremeConstraint(p, cons1)
-# cons2(x) = x[1] <1.
-# AddExtremeConstraint(p, cons2)
 
 """
     plot_Bpoint(points::Vector{B_points})
@@ -411,7 +344,7 @@ function checkBiMADSStopping(p::DSProblem,status::BiMADS_status,undominated_poin
             i=_get_conditionindexes(p,HypervolumeStoppingCondition)[1]
             diff=hvIndicator(undominated_points)-status.hypervolume
             status.hypervolume=hvIndicator(undominated_points)
-            status.hypervolume>=p.stoppingconditions[i].limit && return false
+            status.hypervolume>=p.stoppingconditions[i].limit && return false #if the HV smaller than a certain value
             # diff<=p.stoppingconditions[i].limit && return false #if the change of HV smaller than threshold
         end
     end
@@ -459,8 +392,8 @@ function Optimize_Bi!(p::DSProblem)
     while true
         count=0
 # count2=0
-eva=500
-tti=10000
+# eva=500
+# tti=10000
 # length(undominated_points)>200 && break
         #Reference point determination
         j, δ, ref_point=ReferencePointDetermination(undominated_points)
@@ -484,9 +417,9 @@ tti=10000
 
 
 
-p_reform.status.function_evaluations>eva && break
-p_reform.status.optimization_status=PollPrecisionLimit
-count>3000 && break
+# p_reform.status.function_evaluations>eva && break
+# p_reform.status.optimization_status=PollPrecisionLimit
+# count>3000 && break
 # plot!(fig2,[p1.objective(p_reform.x)],[p2.objective(p_reform.x)],seriestype = :scatter,color=logocolors.blue)
             end
         end
@@ -516,13 +449,7 @@ count>3000 && break
         # fig3=plot_Bpoint(undominated_points)
         # figall=plot(fig2,fig3,aspect_ratio=1)
         # savefig(figall, "/Users/zyy/Desktop/XJTLU/MSc_Project/Julia/test_julia/Results/DS_result_$(iteration_count-1).pdf");
-# sleep(2)
-# check()==1 && break
-# if !isempty(input)
-#     println("dd")
-#     display(input)
-#     break
-# end
+
     end
     # update_p(p_reform,status)
     println("===============================")
@@ -533,24 +460,8 @@ count>3000 && break
     println("Hyper-Volume: ",hvIndicator(undominated_points))
     println("Optimization Status: ",status.opt_status)
     println("===============================")
-    # @show paretoCoverage(undominated_points)
     return undominated_points
 end
-
-# @time result=Optimize!(p)
-# display(result)
-# display(paretoCoverage(result))
-# display(hvIndicator(result))
-# fig=scatter()
-# for i in 1:length(result)
-#     fig=scatter!([result[i].cost[1]],[result[i].cost[2]],color=logocolors.red,legend = false)
-# end
-# display(fig)
-# savefig(fig, "/Users/zyy/Desktop/XJTLU/MSc_Project/Julia/test_julia/Results/DS_result_$(p.stoppingconditions[1].limit).pdf");
-
-
-
-
 
 """
     p_dim(obj::Function,p.N)::Int
